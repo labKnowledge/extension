@@ -1,5 +1,7 @@
-const STORAGE_KEY = "quietViewRules";
-const LEGACY_STORAGE_KEY = "areaHiderRules";
+importScripts("utils/constants.js");
+
+const STORAGE_KEY = QUIETVIEW.storageKey;
+const LEGACY_STORAGE_KEY = QUIETVIEW.legacyStorageKey;
 
 async function migrateLegacyStorage() {
   const result = await chrome.storage.local.get([STORAGE_KEY, LEGACY_STORAGE_KEY]);
@@ -108,7 +110,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     if (message.type === "EXPORT_RULES") {
       const ruleMap = await getRuleMap();
-      sendResponse({ ok: true, rules: ruleMap[message.origin] || [] });
+      const origin = message.origin;
+      sendResponse({
+        ok: true,
+        rules: ruleMap[origin] || [],
+        export: {
+          quietviewVersion: QUIETVIEW.exportFormatVersion,
+          origin,
+          exportedAt: new Date().toISOString(),
+          rules: ruleMap[origin] || []
+        }
+      });
       return;
     }
 

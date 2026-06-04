@@ -8,7 +8,13 @@
   </head>
   <body>
     <main class="wrap">
-      <h1>QuietView</h1>
+      <header class="brand-header">
+        <img class="brand-icon" src="icons/icon-32.png" width="32" height="32" alt="" />
+        <div class="brand-text">
+          <h1>QuietView</h1>
+          <p class="tagline">Hide clutter. Keep your view quiet.</p>
+        </div>
+      </header>
       <p id="originLabel" class="origin">Loading...</p>
 
       <section class="panel">
@@ -21,35 +27,39 @@
           </select>
         </div>
         <div class="row">
-          <button id="startPickerBtn">Start picker</button>
-          <button id="cancelPickerBtn" class="secondary">Cancel</button>
+          <button id="startPickerBtn" type="button">Start picker</button>
+          <button id="cancelPickerBtn" class="secondary" type="button">Cancel</button>
         </div>
       </section>
 
       <section class="panel">
         <h2>Add by selector</h2>
         <input id="selectorInput" type="text" placeholder='e.g. [data-testid="chatlist-header"]' />
-        <button id="addSelectorBtn">Add selector rule</button>
+        <button id="addSelectorBtn" type="button">Add selector rule</button>
       </section>
 
       <section class="panel">
         <h2>Add by pasted HTML</h2>
         <textarea id="snippetInput" placeholder="Paste a target HTML element snippet here..."></textarea>
-        <button id="addSnippetBtn">Add snippet rule</button>
+        <button id="addSnippetBtn" type="button">Add snippet rule</button>
       </section>
 
       <section class="panel">
         <h2>Rules</h2>
         <div class="row">
-          <button id="exportRulesBtn" class="secondary">Export JSON</button>
-          <button id="importRulesBtn" class="secondary">Import JSON</button>
+          <button id="exportRulesBtn" class="secondary" type="button">Export JSON</button>
+          <button id="importRulesBtn" class="secondary" type="button">Import JSON</button>
           <input id="importRulesFile" type="file" accept="application/json" hidden />
         </div>
         <div id="rulesList" class="rules"></div>
       </section>
 
-      <p id="status" class="status"></p>
+      <p id="status" class="status" role="status"></p>
+      <footer class="footer">
+        <a id="privacyLink" href="#" target="_blank" rel="noopener noreferrer">Privacy</a>
+      </footer>
     </main>
+    <script src="utils/constants.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

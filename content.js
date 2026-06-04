@@ -200,18 +200,16 @@ function updateOutline(target) {
   outline.style.height = `${rect.height}px`;
 }
 
-const PICKER_STATUS_KEY = "quietviewPickerStatus";
-
 function notifyPickerResult(result) {
   const text = result.ok
-    ? "QuietView: element hidden."
-    : result.error || "QuietView: could not save rule.";
+    ? `${QUIETVIEW.name}: element hidden.`
+    : result.error || `${QUIETVIEW.name}: could not save rule.`;
   const isError = !result.ok;
 
   if (typeof chrome !== "undefined" && chrome.storage?.session) {
     chrome.storage.session
       .set({
-        [PICKER_STATUS_KEY]: {
+        [QUIETVIEW.pickerStatusKey]: {
           text,
           isError,
           timestamp: Date.now()
@@ -234,7 +232,7 @@ function notifyPickerResult(result) {
     borderRadius: "8px",
     font: "13px/1.4 system-ui, sans-serif",
     color: "#fff",
-    background: isError ? "#b3261e" : "#1a73e8",
+    background: isError ? QUIETVIEW.colors.toastError : QUIETVIEW.colors.toastOk,
     boxShadow: "0 4px 12px rgba(0,0,0,0.25)"
   });
   document.documentElement.appendChild(toast);
@@ -265,8 +263,8 @@ function startPicker(hideMode) {
 
   const outlineEl = document.createElement("div");
   outlineEl.style.position = "absolute";
-  outlineEl.style.border = "2px solid #1a73e8";
-  outlineEl.style.background = "rgba(26, 115, 232, 0.12)";
+  outlineEl.style.border = `2px solid ${QUIETVIEW.colors.pickerOutline}`;
+  outlineEl.style.background = `rgba(${QUIETVIEW.colors.accentRgb}, 0.12)`;
   outlineEl.style.pointerEvents = "none";
   outlineEl.style.zIndex = "2147483647";
   document.documentElement.appendChild(outlineEl);

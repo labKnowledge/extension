@@ -32,19 +32,18 @@ function setStatus(text, isError) {
   statusEl.classList.toggle("error", Boolean(isError));
 }
 
-const PICKER_STATUS_KEY = "quietviewPickerStatus";
-
 async function applyPickerStatusFromSession() {
   if (!chrome.storage?.session) {
     return false;
   }
-  const data = await chrome.storage.session.get(PICKER_STATUS_KEY);
-  const status = data[PICKER_STATUS_KEY];
+  const key = QUIETVIEW.pickerStatusKey;
+  const data = await chrome.storage.session.get(key);
+  const status = data[key];
   if (!status || Date.now() - status.timestamp > 120000) {
     return false;
   }
   setStatus(status.text, status.isError);
-  await chrome.storage.session.remove(PICKER_STATUS_KEY);
+  await chrome.storage.session.remove(key);
   return true;
 }
 
@@ -80,12 +79,12 @@ async function sendToActiveTab(message) {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: activeTabId },
-        files: ["utils/selector.js", "content.js"]
+        files: ["utils/constants.js", "utils/selector.js", "content.js"]
       });
       return await chrome.tabs.sendMessage(activeTabId, message);
     } catch (_injectError) {
       throw new Error(
-        "This page cannot run QuietView. Open a normal website tab (not chrome:// or extension pages)."
+        `This page cannot run ${QUIETVIEW.name}. Open a normal website tab (not chrome:// or extension pages).`
       );
     }
   }
@@ -437,9 +436,15 @@ exportRulesBtn.addEventListener("click", async () => {
     if (!response?.ok) {
       throw new Error(response?.error || "Failed to export rules.");
     }
-    const blob = new Blob([JSON.stringify(response.rules || [], null, 2)], { type: "application/json" });
+    const exportPayload = {
+      quietviewVersion: QUIETVIEW.exportFormatVersion,
+      origin: currentOrigin,
+      exportedAt: new Date().toISOString(),
+      rules: response.rules || []
+    };
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const filename = `quietview-rules-${new URL(currentOrigin).hostname}.json`;
+    const filename = `${QUIETVIEW.exportPrefix}-${new URL(currentOrigin).hostname}.json`;
     await chrome.downloads.download({ url, filename, saveAs: true });
     setStatus("Rules exported.", false);
   } catch (error) {
@@ -460,13 +465,18 @@ importRulesFile.addEventListener("change", async () => {
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
-    if (!Array.isArray(parsed)) {
-      throw new Error("Import file must contain a JSON array of rules.");
+    const rules = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.rules)
+        ? parsed.rules
+        : null;
+    if (!rules) {
+      throw new Error("Import file must contain a JSON array of rules or a { rules: [] } export.");
     }
     const response = await chrome.runtime.sendMessage({
       type: "IMPORT_RULES",
       origin: currentOrigin,
-      rules: parsed
+      rules
     });
     if (!response?.ok) {
       throw new Error(response?.error || "Failed to import rules.");
@@ -480,6 +490,22 @@ importRulesFile.addEventListener("change", async () => {
   }
 });
 
+(function setupBranding() {
+  document.title = QUIETVIEW.name;
+  const h1 = document.querySelector(".brand-text h1");
+  const tagline = document.querySelector(".tagline");
+  if (h1) {
+    h1.textContent = QUIETVIEW.name;
+  }
+  if (tagline) {
+    tagline.textContent = QUIETVIEW.tagline;
+  }
+  const privacyLink = document.getElementById("privacyLink");
+  if (privacyLink && chrome.runtime?.getURL) {
+    privacyLink.href = chrome.runtime.getURL("PRIVACY.md");
+  }
+})();
+
 (async function init() {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -490,7 +516,7 @@ importRulesFile.addEventListener("change", async () => {
     activeTabId = tab.id;
     activeTabUrl = tab.url || "";
     if (!activeTabUrl || !/^https?:\/\//.test(activeTabUrl)) {
-      throw new Error("QuietView works on normal website tabs only.");
+      throw new Error(`${QUIETVIEW.name} works on normal website tabs only.`);
     }
     currentOrigin = new URL(activeTabUrl).origin;
     await ensureDefaultWhatsAppRule();
