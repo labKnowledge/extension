@@ -2,7 +2,10 @@
 
 **Hide clutter. Keep your view quiet.**
 
-QuietView is a browser extension that lets you hide distracting page elements on any website — chat sidebars, news feeds, cookie banners, dashboard widgets, and more. Point at what you want gone, and your rules persist per site.
+QuietView is a browser extension by [Eligapris](https://eligapris.com) that lets you hide distracting page elements on any website — chat sidebars, news feeds, cookie banners, dashboard widgets, and more. Point at what you want gone, and your rules persist per site.
+
+- **Product page:** https://eligapris.com/quietview
+- **Support:** support@eligapris.com
 
 ## Install
 
@@ -69,7 +72,10 @@ On WhatsApp Web, a default hide rule is auto-seeded for the chat list sidebar if
 
 ## Privacy
 
-See [PRIVACY.md](PRIVACY.md). QuietView stores rules locally only; no remote data collection.
+- **Online:** https://eligapris.com/quietview/privacy
+- **Source in repo:** [PRIVACY.md](PRIVACY.md)
+
+QuietView stores rules locally only; no remote data collection.
 
 ## Pre-release QA checklist
 
@@ -84,7 +90,7 @@ See [PRIVACY.md](PRIVACY.md). QuietView stores rules locally only; no remote dat
 ./scripts/package.sh
 ```
 
-Output: `dist/quietview-1.0.0.zip` for Chrome Web Store and Firefox AMO upload.
+Output: `dist/quietview-1.0.1.zip` for Chrome Web Store and Firefox AMO upload.
 
 ## Regenerate icons
 

@@ -38,13 +38,16 @@ QuietView stores rules locally on your device. No account required. No data sold
 
 ## Privacy policy URL
 
-Host `PRIVACY.md` from your repository or website and paste the public URL in the store dashboard.  
-For local review: open via the Privacy link in the extension popup (`chrome-extension://…/PRIVACY.md`).
+**https://eligapris.com/quietview/privacy**
+
+Publish content from [`PRIVACY.md`](../PRIVACY.md) at that URL. The extension popup Privacy link opens this page.
 
 ## Support
 
-- **Support email:** (add your email)
-- **Homepage:** (add when available)
+- **Publisher:** Eligapris
+- **Support email:** support@eligapris.com
+- **Homepage:** https://eligapris.com/quietview
+- **Company site:** https://eligapris.com
 
 ## Permission justifications (Chrome Web Store)
 
@@ -66,10 +69,10 @@ Recommended sizes: 1280×800 or 640×400 (Chrome); 1280×720 (Firefox).
 
 ## Firefox-specific
 
-- **Add-on ID:** `quietview@takenolab.dev` (set in `manifest.json`; permanent after first signing)
+- **Add-on ID:** `quietview@eligapris.com` (set in `manifest.json`; permanent after first signing)
 - **Minimum Firefox version:** 109.0
 - **Data collection:** None — declare no data collection in AMO submission
 
 ## Version
 
-**1.0.0**
+**1.0.1**

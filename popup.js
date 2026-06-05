@@ -501,8 +501,13 @@ importRulesFile.addEventListener("change", async () => {
     tagline.textContent = QUIETVIEW.tagline;
   }
   const privacyLink = document.getElementById("privacyLink");
-  if (privacyLink && chrome.runtime?.getURL) {
-    privacyLink.href = chrome.runtime.getURL("PRIVACY.md");
+  if (privacyLink) {
+    privacyLink.href = QUIETVIEW.publisher.privacyUrl;
+  }
+  const publisherLink = document.getElementById("publisherLink");
+  if (publisherLink) {
+    publisherLink.href = QUIETVIEW.publisher.homepage;
+    publisherLink.title = QUIETVIEW.publisher.name;
   }
 })();
 

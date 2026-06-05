@@ -1,6 +1,8 @@
 # QuietView Privacy Policy
 
-**Last updated:** June 2026
+**Last updated:** June 2026  
+**Operator:** [Eligapris](https://eligapris.com)  
+**Canonical URL:** https://eligapris.com/quietview/privacy
 
 QuietView is a browser extension that hides page elements you choose. This policy describes how the extension handles information.
 
@@ -40,8 +42,8 @@ QuietView runs on pages you visit to hide elements you select. It does not chang
 
 ## Updates
 
-If this policy changes, the updated file will be included in extension releases.
+If this policy changes, the updated version will be published at https://eligapris.com/quietview/privacy and included in extension releases.
 
 ## Contact
 
-For privacy questions, contact the developer listed on the Chrome Web Store or Firefox Add-ons listing page.
+For privacy questions, contact **support@eligapris.com** or visit https://eligapris.com/quietview.

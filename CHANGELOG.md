@@ -2,6 +2,15 @@
 
 All notable changes to QuietView are documented in this file.
 
+## [1.0.1] - 2026-06-03
+
+### Changed
+
+- Publisher branding: Eligapris (eligapris.com), support@eligapris.com
+- Privacy policy and footer links point to https://eligapris.com/quietview/privacy
+- Firefox add-on ID: `quietview@eligapris.com`
+- Manifest `homepage_url` and `author` set for store listings
+
 ## [1.0.0] - 2026-06-03
 
 ### Added

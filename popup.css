@@ -308,6 +308,16 @@ textarea {
 .footer {
   margin-top: 8px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.footer-sep {
+  font-size: 11px;
+  color: var(--qv-text-muted);
+  user-select: none;
 }
 
 .footer a {
