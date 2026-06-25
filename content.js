@@ -6,11 +6,16 @@ const LEGACY_MARKER_ATTR = "data-areahider-rule-ids";
 const LEGACY_ORIG_DISPLAY_ATTR = "data-areahider-orig-display";
 const LEGACY_ORIG_VISIBILITY_ATTR = "data-areahider-orig-visibility";
 
+const FLOATING_BTN_ID = "quietview-toggle-btn";
+
 let currentRules = [];
 let currentOrigin = window.location.origin;
 let pickerState = null;
 let observer = null;
 let applyTimer = null;
+let isQuietViewEnabled = true;
+let floatingButton = null;
+let toggleDebounce = null;
 
 function migrateLegacyDomMarkers() {
   const marked = document.querySelectorAll(`[${LEGACY_MARKER_ATTR}]`);
@@ -121,6 +126,192 @@ function applyAllRules() {
   }
 }
 
+function showAll() {
+  const marked = document.querySelectorAll(`[${MARKER_ATTR}]`);
+  for (const el of marked) {
+    const originalVisibility = el.getAttribute(ORIG_VISIBILITY_ATTR);
+    if (originalVisibility) {
+      el.style.visibility = originalVisibility;
+    } else {
+      el.style.removeProperty("visibility");
+    }
+
+    const originalDisplay = el.getAttribute(ORIG_DISPLAY_ATTR);
+    if (originalDisplay) {
+      el.style.display = originalDisplay;
+    } else {
+      el.style.removeProperty("display");
+    }
+  }
+}
+
+function hideAll() {
+  applyAllRules();
+}
+
+function showToast(message, isError = false) {
+  const toast = document.createElement("div");
+  toast.textContent = message;
+  toast.setAttribute("role", "status");
+  Object.assign(toast.style, {
+    position: "fixed",
+    bottom: "16px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: "2147483647",
+    maxWidth: "min(90vw, 420px)",
+    padding: "10px 14px",
+    borderRadius: "8px",
+    font: "13px/1.4 system-ui, sans-serif",
+    color: "#fff",
+    background: isError ? QUIETVIEW.colors.toastError : QUIETVIEW.colors.toastOk,
+    boxShadow: "0 4px 12px rgba(0,0,0,0.25)"
+  });
+  document.documentElement.appendChild(toast);
+  window.setTimeout(() => toast.remove(), isError ? 6000 : 3000);
+}
+
+function toggleQuietView() {
+  if (toggleDebounce) {
+    return;
+  }
+
+  toggleDebounce = true;
+  window.setTimeout(() => {
+    toggleDebounce = false;
+  }, 200);
+
+  if (isQuietViewEnabled) {
+    showAll();
+    isQuietViewEnabled = false;
+    showToast(`${QUIETVIEW.name}: All elements shown.`);
+  } else {
+    hideAll();
+    isQuietViewEnabled = true;
+    showToast(`${QUIETVIEW.name}: All elements hidden.`);
+  }
+
+  updateFloatingButton();
+}
+
+function getEyeIcon(isOpen) {
+  if (isOpen) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
+    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
+    <line x1="2" x2="22" y1="2" y2="22"/>
+  </svg>`;
+}
+
+function updateFloatingButton() {
+  if (!floatingButton) {
+    return;
+  }
+
+  const iconHtml = getEyeIcon(!isQuietViewEnabled);
+  floatingButton.innerHTML = iconHtml;
+  floatingButton.setAttribute("aria-label", isQuietViewEnabled ? "Show all hidden elements" : "Hide all elements");
+}
+
+function createFloatingButton() {
+  if (floatingButton) {
+    return floatingButton;
+  }
+
+  const button = document.createElement("div");
+  button.id = FLOATING_BTN_ID;
+  button.setAttribute("role", "button");
+  button.setAttribute("tabindex", "0");
+  button.setAttribute("aria-label", "Show all hidden elements");
+
+  Object.assign(button.style, {
+    position: "fixed",
+    right: "24px",
+    bottom: "24px",
+    width: "48px",
+    height: "48px",
+    borderRadius: "50%",
+    backgroundColor: QUIETVIEW.colors.accent,
+    cursor: "pointer",
+    zIndex: "2147483647",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+    transition: "transform 0.15s, background-color 0.15s, opacity 0.2s",
+    border: "none",
+    opacity: "0"
+  });
+
+  button.innerHTML = getEyeIcon(false);
+
+  const hoverStyle = document.createElement("style");
+  hoverStyle.textContent = `
+    #${FLOATING_BTN_ID}:hover {
+      transform: scale(1.1);
+      background-color: ${QUIETVIEW.colors.accent}dd;
+    }
+    #${FLOATING_BTN_ID}:focus {
+      outline: 2px solid white;
+      outline-offset: 2px;
+    }
+  `;
+  document.head.appendChild(hoverStyle);
+
+  const onClick = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleQuietView();
+  };
+
+  const onKeyDown = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleQuietView();
+    }
+  };
+
+  button.addEventListener("click", onClick, true);
+  button.addEventListener("keydown", onKeyDown, true);
+
+  document.documentElement.appendChild(button);
+  floatingButton = button;
+
+  window.setTimeout(() => {
+    button.style.opacity = "1";
+  }, 10);
+
+  return button;
+}
+
+function showFloatingButtonIfNeeded() {
+  const hasRules = currentRules.length > 0;
+  const isMainFrame = window === window.top;
+
+  if (!hasRules || !isMainFrame) {
+    if (floatingButton) {
+      floatingButton.style.opacity = "0";
+      window.setTimeout(() => {
+        if (floatingButton && !hasRules) {
+          floatingButton.remove();
+          floatingButton = null;
+        }
+      }, 200);
+    }
+    return;
+  }
+
+  createFloatingButton();
+  updateFloatingButton();
+}
+
 function scheduleApplyAll() {
   window.clearTimeout(applyTimer);
   applyTimer = window.setTimeout(applyAllRules, 120);
@@ -172,6 +363,7 @@ async function toggleRule(origin, id, enabled) {
 async function refreshRules() {
   currentRules = await getRulesForOrigin(currentOrigin);
   applyAllRules();
+  showFloatingButtonIfNeeded();
 }
 
 function pickElementAtPoint(x, y) {
@@ -465,6 +657,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           applyRule(rule);
         }
       }
+      showFloatingButtonIfNeeded();
       sendResponse({ ok: true, rules: currentRules });
       return;
     }
@@ -473,7 +666,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const { id } = message;
       removeRuleFromDom(id);
       currentRules = await deleteRule(currentOrigin, id);
+      showFloatingButtonIfNeeded();
       sendResponse({ ok: true, rules: currentRules });
+      return;
+    }
+
+    if (message.type === "TOGGLE_QUIETVIEW") {
+      toggleQuietView();
+      sendResponse({ ok: true, enabled: isQuietViewEnabled });
       return;
     }
 
