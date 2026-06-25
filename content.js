@@ -119,7 +119,10 @@ function applyRule(rule) {
   return { matched: nodes.length };
 }
 
-function applyAllRules() {
+function applyAllRules(force = false) {
+  if (!force && !isQuietViewEnabled) {
+    return;
+  }
   const enabledRules = currentRules.filter((rule) => rule.enabled);
   for (const rule of enabledRules) {
     applyRule(rule);
@@ -146,7 +149,7 @@ function showAll() {
 }
 
 function hideAll() {
-  applyAllRules();
+  applyAllRules(true);
 }
 
 function showToast(message, isError = false) {
@@ -510,7 +513,7 @@ function startPicker(hideMode) {
       hideMode: pickerState.hideMode || "displayNone"
     };
     currentRules = await saveRule(rule);
-    applyAllRules();
+    applyAllRules(true);
     stopPicker();
     notifyPickerResult({ ok: true, selector, matchCount: resolved.matchCount });
   };
@@ -605,7 +608,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         enabled: true,
         hideMode: message.hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone"
       });
-      applyAllRules();
+      applyAllRules(true);
       sendResponse({ ok: true, rules: currentRules, matched: count });
       return;
     }
@@ -641,7 +644,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         enabled: true,
         hideMode: message.hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone"
       });
-      applyAllRules();
+      applyAllRules(true);
       sendResponse({ ok: true, rules: currentRules, selector, matched });
       return;
     }
