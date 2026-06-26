@@ -92,7 +92,23 @@ QuietView stores rules locally only; no remote data collection.
 
 Output: `dist/quietview-1.0.1.zip` for Chrome Web Store and Firefox AMO upload.
 
-## Regenerate icons
+## Generate all assets (icons, screenshots, store graphics)
+
+```bash
+./scripts/build-assets.sh
+```
+
+Generates:
+- Extension icons (16, 32, 48, 96, 128px)
+- Store icon (128px)
+- Store screenshots (1280×800, 640×400)
+- Feature banner (1280×320)
+
+Requirements: ImageMagick, Chrome/Chromium
+
+See [`scripts/ASSETS.md`](scripts/ASSETS.md) for details.
+
+## Regenerate icons only
 
 ```bash
 ./scripts/generate-icons.sh

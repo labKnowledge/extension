@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280, height=800, initial-scale=1.0">
+  <title>QuietView - Popup Screenshot</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #2d2d2d;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    .mockup-container {
+      display: flex;
+      gap: 40px;
+      align-items: center;
+      width: 100%;
+      height: 100vh;
+    }
+    .browser-chrome {
+      background: #2d2d2d;
+      width: 1280px;
+      height: 800px;
+      border-radius: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+    .browser-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 0;
+      padding: 12px;
+    }
+    .traffic-lights { display: flex; gap: 8px; }
+    .traffic-lights span {
+      width: 12px; height: 12px; border-radius: 50%;
+    }
+    .traffic-lights .red { background: #ff5f56; }
+    .traffic-lights .yellow { background: #ffbd2e; }
+    .traffic-lights .green { background: #27c93f; }
+    .url-bar {
+      background: #1a1a1a;
+      border-radius: 6px;
+      padding: 8px 16px;
+      color: #888;
+      font-size: 13px;
+      flex: 1;
+      text-align: center;
+    }
+    .page-content {
+      background: #f5f5f5;
+      border-radius: 0 0 8px 8px;
+      width: 100%;
+      height: 748px;
+      position: relative;
+      overflow: hidden;
+    }
+    .fake-page {
+      padding: 20px;
+      background: #fff;
+      height: 100%;
+    }
+    .fake-header {
+      background: #e8e8e8;
+      height: 60px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .fake-sidebar {
+      position: absolute;
+      right: 20px;
+      top: 100px;
+      width: 200px;
+      height: 350px;
+      background: #fff8;
+      border: 2px dashed #e74c3c;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #e74c3c;
+      font-weight: 600;
+    }
+    .extension-popup {
+      position: absolute;
+      top: 60px;
+      right: 80px;
+      width: 360px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    .popup-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .popup-icon {
+      width: 32px;
+      height: 32px;
+      background: white;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .popup-icon svg { width: 20px; height: 20px; }
+    .popup-title h3 {
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .popup-title p {
+      color: rgba(255,255,255,0.8);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+    .popup-body {
+      padding: 16px;
+    }
+    .origin {
+      background: #f0f0f0;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 16px;
+    }
+    .panel {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .panel h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    .rule-item {
+      background: white;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-left: 3px solid #667eea;
+      font-size: 12px;
+      color: #444;
+    }
+    .rule-selector {
+      font-family: monospace;
+      font-size: 11px;
+      color: #888;
+      margin-top: 4px;
+    }
+    .badge {
+      display: inline-block;
+      background: #27c93f;
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+    .cta-text {
+      position: absolute;
+      bottom: -60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="mockup-container">
+    <div class="browser-chrome">
+      <div class="browser-header">
+        <div class="traffic-lights">
+          <span class="red"></span>
+          <span class="yellow"></span>
+          <span class="green"></span>
+        </div>
+        <div class="url-bar">web.whatsapp.com</div>
+      </div>
+      <div class="page-content">
+        <div class="fake-page">
+          <div class="fake-header"></div>
+        </div>
+        <div class="fake-sidebar">Hidden sidebar</div>
+        <div class="extension-popup">
+          <div class="popup-header">
+            <div class="popup-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </div>
+            <div class="popup-title">
+              <h3>QuietView</h3>
+              <p>Hide clutter. Keep your view quiet.</p>
+            </div>
+          </div>
+          <div class="popup-body">
+            <div class="origin">web.whatsapp.com</div>
+            <div class="panel">
+              <h4>Rules (2 active)</h4>
+              <div class="rule-item">
+                Chat list sidebar
+                <span class="badge">On</span>
+                <div class="rule-selector">#pane-side</div>
+              </div>
+              <div class="rule-item">
+                Header section
+                <span class="badge">On</span>
+                <div class="rule-selector">header > div</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cta-text">Manage hide rules for any site</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

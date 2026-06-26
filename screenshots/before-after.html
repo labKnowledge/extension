@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280, height=800, initial-scale=1.0">
+  <title>QuietView - Before/After Screenshot</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    .comparison-container {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      width: 100%;
+      height: 100vh;
+    }
+    .browser-frame {
+      background: #2d2d2d;
+      border-radius: 0;
+      width: 580px;
+      height: 400px;
+      padding: 0;
+      box-shadow: none;
+    }
+    .browser-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 0;
+      padding: 12px;
+    }
+    .traffic-lights { display: flex; gap: 8px; }
+    .traffic-lights span {
+      width: 12px; height: 12px; border-radius: 50%;
+    }
+    .traffic-lights .red { background: #ff5f56; }
+    .traffic-lights .yellow { background: #ffbd2e; }
+    .traffic-lights .green { background: #27c93f; }
+    .url-bar {
+      background: #1a1a1a;
+      border-radius: 6px;
+      padding: 8px 16px;
+      color: #888;
+      font-size: 13px;
+      flex: 1;
+      text-align: center;
+    }
+    .page-content {
+      background: #f5f5f5;
+      border-radius: 0;
+      width: 100%;
+      height: 352px;
+      position: relative;
+      overflow: hidden;
+    }
+    .whatsapp-ui {
+      background: #111b21;
+      height: 100%;
+      display: flex;
+    }
+    .sidebar {
+      width: 320px;
+      background: #111b21;
+      border-right: 1px solid #2a3942;
+      padding: 12px;
+    }
+    .sidebar.hidden {
+      display: none;
+    }
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      background: #202c33;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .chat-avatar {
+      width: 40px;
+      height: 40px;
+      background: #667eea;
+      border-radius: 50%;
+    }
+    .chat-info h4 {
+      color: #e9edef;
+      font-size: 14px;
+    }
+    .chat-info p {
+      color: #8696a0;
+      font-size: 12px;
+    }
+    .chat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .chat-item {
+      background: #202c33;
+      padding: 12px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .chat-item .avatar {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 50%;
+    }
+    .chat-item .info h5 {
+      color: #e9edef;
+      font-size: 14px;
+    }
+    .chat-item .info p {
+      color: #8696a0;
+      font-size: 12px;
+    }
+    .chat-area {
+      flex: 1;
+      background: #0b141a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .chat-area.expanded {
+      flex: 1;
+    }
+    .chat-area-logo {
+      width: 80px;
+      height: 80px;
+      background: #667eea;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .chat-area-logo svg {
+      width: 40px;
+      height: 40px;
+      stroke: white;
+    }
+    .chat-area p {
+      color: #8696a0;
+      font-size: 14px;
+      text-align: center;
+    }
+    .label {
+      text-align: center;
+      margin-top: 16px;
+      color: #888;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .label.before { color: #e74c3c; }
+    .label.after { color: #27c93f; }
+    .arrow {
+      font-size: 32px;
+      color: #667eea;
+    }
+  </style>
+</head>
+<body>
+  <div class="comparison-container">
+    <!-- Before -->
+    <div>
+      <div class="browser-frame">
+        <div class="browser-header">
+          <div class="traffic-lights">
+            <span class="red"></span>
+            <span class="yellow"></span>
+            <span class="green"></span>
+          </div>
+          <div class="url-bar">web.whatsapp.com</div>
+        </div>
+        <div class="page-content">
+          <div class="whatsapp-ui">
+            <div class="sidebar">
+              <div class="chat-header">
+                <div class="chat-avatar"></div>
+                <div class="chat-info">
+                  <h4>My Status</h4>
+                  <p>View updates</p>
+                </div>
+              </div>
+              <div class="chat-list">
+                <div class="chat-item">
+                  <div class="avatar"></div>
+                  <div class="info">
+                    <h5>Work Team</h5>
+                    <p>Meeting at 3pm...</p>
+                  </div>
+                </div>
+                <div class="chat-item">
+                  <div class="avatar"></div>
+                  <div class="info">
+                    <h5>Family Group</h5>
+                    <p>Mom: Call me...</p>
+                  </div>
+                </div>
+                <div class="chat-item">
+                  <div class="avatar"></div>
+                  <div class="info">
+                    <h5>Friend</h5>
+                    <p>Check this out...</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-area">
+              <div class="chat-area-logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <p>WhatsApp Web</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="label before">BEFORE — Distracting sidebar visible</div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <!-- After -->
+    <div>
+      <div class="browser-frame">
+        <div class="browser-header">
+          <div class="traffic-lights">
+            <span class="red"></span>
+            <span class="yellow"></span>
+            <span class="green"></span>
+          </div>
+          <div class="url-bar">web.whatsapp.com</div>
+        </div>
+        <div class="page-content">
+          <div class="whatsapp-ui">
+            <div class="sidebar hidden"></div>
+            <div class="chat-area expanded">
+              <div class="chat-area-logo">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </div>
+              <p>WhatsApp Web — Clean, focused view</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="label after">AFTER — Sidebar hidden with QuietView</div>
+    </div>
+  </div>
+</body>
+</html>
