@@ -19,6 +19,13 @@ zip -r "$OUT" . \
   -x "dist/*" \
   -x "*.zip" \
   -x ".DS_Store" \
-  -x "web-ext-artifacts/*"
+  -x "web-ext-artifacts/*" \
+  -x "scripts/*" \
+  -x "docs/*" \
+  -x "screenshots/*" \
+  -x "assets/*" \
+  -x "*.sh" \
+  -x "*.md" \
+  -x ".gitignore"
 
 echo "Created $OUT"
