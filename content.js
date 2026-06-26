@@ -16,6 +16,43 @@ let applyTimer = null;
 let isQuietViewEnabled = true;
 let floatingButton = null;
 let toggleDebounce = null;
+let dragState = null;
+let buttonPosition = null;
+
+const BUTTON_POSITION_KEY_PREFIX = "quietview_button_position_";
+
+function saveButtonPosition(right, bottom) {
+  const key = BUTTON_POSITION_KEY_PREFIX + currentOrigin;
+  const data = { right, bottom };
+  if (typeof chrome !== "undefined" && chrome.storage?.local) {
+    chrome.storage.local.set({ [key]: data }).catch(() => {});
+  }
+}
+
+function loadButtonPosition(callback) {
+  const key = BUTTON_POSITION_KEY_PREFIX + currentOrigin;
+  if (typeof chrome !== "undefined" && chrome.storage?.local) {
+    chrome.storage.local.get([key], (result) => {
+      const position = result[key] || { right: 24, bottom: 24 };
+      buttonPosition = position;
+      if (callback) callback(position);
+    });
+  } else {
+    const position = { right: 24, bottom: 24 };
+    buttonPosition = position;
+    if (callback) callback(position);
+  }
+}
+
+function updateButtonPosition(right, bottom) {
+  if (!floatingButton) return;
+  const maxRight = window.innerWidth - 48;
+  const maxBottom = window.innerHeight - 48;
+  const clampedRight = Math.max(0, Math.min(right, maxRight));
+  const clampedBottom = Math.max(0, Math.min(bottom, maxBottom));
+  floatingButton.style.right = `${clampedRight}px`;
+  floatingButton.style.bottom = `${clampedBottom}px`;
+}
 
 function migrateLegacyDomMarkers() {
   const marked = document.querySelectorAll(`[${LEGACY_MARKER_ATTR}]`);
@@ -222,26 +259,29 @@ function updateFloatingButton() {
   floatingButton.setAttribute("aria-label", isQuietViewEnabled ? "Show all hidden elements" : "Hide all elements");
 }
 
-function createFloatingButton() {
+function createFloatingButton(initialPosition) {
   if (floatingButton) {
     return floatingButton;
   }
+
+  const position = initialPosition || buttonPosition || { right: 24, bottom: 24 };
 
   const button = document.createElement("div");
   button.id = FLOATING_BTN_ID;
   button.setAttribute("role", "button");
   button.setAttribute("tabindex", "0");
   button.setAttribute("aria-label", "Show all hidden elements");
+  button.setAttribute("data-draggable", "true");
 
   Object.assign(button.style, {
     position: "fixed",
-    right: "24px",
-    bottom: "24px",
+    right: `${position.right}px`,
+    bottom: `${position.bottom}px`,
     width: "48px",
     height: "48px",
     borderRadius: "50%",
     backgroundColor: QUIETVIEW.colors.accent,
-    cursor: "pointer",
+    cursor: "grab",
     zIndex: "2147483647",
     display: "flex",
     alignItems: "center",
@@ -264,10 +304,108 @@ function createFloatingButton() {
       outline: 2px solid white;
       outline-offset: 2px;
     }
+    #${FLOATING_BTN_ID}[data-dragging="true"] {
+      cursor: grabbing;
+      transform: scale(1.05);
+    }
   `;
   document.head.appendChild(hoverStyle);
 
+  const onMouseDown = (event) => {
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    dragState = {
+      startX: clientX,
+      startY: clientY,
+      initialRight: parseInt(button.style.right) || 24,
+      initialBottom: parseInt(button.style.bottom) || 24,
+      startTime: Date.now(),
+      isDragging: false
+    };
+
+    document.addEventListener("mousemove", onMouseMove, true);
+    document.addEventListener("touchmove", onMouseMove, { passive: false, capture: true });
+    document.addEventListener("mouseup", onMouseUp, true);
+    document.addEventListener("touchend", onMouseUp, true);
+  };
+
+  const onMouseMove = (event) => {
+    if (!dragState) return;
+
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    const deltaX = dragState.startX - clientX;
+    const deltaY = dragState.startY - clientY;
+
+    if (!dragState.isDragging) {
+      const moved = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      if (moved > 5) {
+        dragState.isDragging = true;
+        button.style.cursor = "grabbing";
+        button.style.transition = "none";
+        button.setAttribute("data-dragging", "true");
+      }
+    }
+
+    if (dragState.isDragging) {
+      event.preventDefault();
+
+      const newRight = dragState.initialRight + deltaX;
+      const newBottom = dragState.initialBottom + deltaY;
+
+      const maxRight = window.innerWidth - 48;
+      const maxBottom = window.innerHeight - 48;
+
+      button.style.right = `${Math.max(0, Math.min(newRight, maxRight))}px`;
+      button.style.bottom = `${Math.max(0, Math.min(newBottom, maxBottom))}px`;
+    }
+  };
+
+  const onMouseUp = (event) => {
+    if (!dragState) return;
+
+    document.removeEventListener("mousemove", onMouseMove, true);
+    document.removeEventListener("touchmove", onMouseMove, true);
+    document.removeEventListener("mouseup", onMouseUp, true);
+    document.removeEventListener("touchend", onMouseUp, true);
+
+    if (dragState.isDragging) {
+      const right = parseInt(button.style.right) || 24;
+      const bottom = parseInt(button.style.bottom) || 24;
+      saveButtonPosition(right, bottom);
+      buttonPosition = { right, bottom };
+
+      button.style.cursor = "grab";
+      button.style.transition = "transform 0.15s, background-color 0.15s, opacity 0.2s";
+      button.removeAttribute("data-dragging");
+    }
+
+    dragState = null;
+  };
+
   const onClick = (event) => {
+    if (dragState && dragState.isDragging) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    if (dragState) {
+      const clientX = event.clientX || (event.changedTouches && event.changedTouches[0]?.clientX) || dragState.startX;
+      const clientY = event.clientY || (event.changedTouches && event.changedTouches[0]?.clientY) || dragState.startY;
+      const deltaX = Math.abs(clientX - dragState.startX);
+      const deltaY = Math.abs(clientY - dragState.startY);
+      const deltaTime = Date.now() - dragState.startTime;
+
+      if (deltaX > 5 || deltaY > 5 || deltaTime > 200) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+
     event.preventDefault();
     event.stopPropagation();
     toggleQuietView();
@@ -281,6 +419,8 @@ function createFloatingButton() {
     }
   };
 
+  button.addEventListener("mousedown", onMouseDown, true);
+  button.addEventListener("touchstart", onMouseDown, { passive: true });
   button.addEventListener("click", onClick, true);
   button.addEventListener("keydown", onKeyDown, true);
 
@@ -311,8 +451,10 @@ function showFloatingButtonIfNeeded() {
     return;
   }
 
-  createFloatingButton();
-  updateFloatingButton();
+  loadButtonPosition((position) => {
+    createFloatingButton(position);
+    updateFloatingButton();
+  });
 }
 
 function scheduleApplyAll() {
