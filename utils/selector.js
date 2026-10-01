@@ -67,6 +67,63 @@
     return `${ancestors.join(" > ")} > ${leaf}`;
   }
 
+  // Fully positional path: always unique on the current page, so it is the
+  // last-resort candidate that keeps the picker from ever failing.
+  function buildStrictPathSelector(element) {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+      return "";
+    }
+    const parts = [];
+    let current = element;
+    while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.documentElement) {
+      if (current.id && /^[a-zA-Z][\w-]*$/.test(current.id)) {
+        parts.unshift(`#${cssEscape(current.id)}`);
+        break;
+      }
+      parts.unshift(`${current.tagName.toLowerCase()}:nth-of-type(${nthAmongTagSiblings(current)})`);
+      current = current.parentElement;
+    }
+    return parts.join(" > ");
+  }
+
+  // Human-readable name for a picked element, shown in the rules list.
+  function describeElement(element) {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+      return "";
+    }
+    const clean = (text) => String(text || "").replace(/\s+/g, " ").trim().slice(0, 48);
+    const attrLabel = clean(element.getAttribute("aria-label") || element.getAttribute("title"));
+    if (attrLabel) {
+      return attrLabel;
+    }
+    const heading = element.querySelector("h1, h2, h3, [role='heading']");
+    const headingText = clean(heading && heading.textContent);
+    if (headingText) {
+      return headingText;
+    }
+    const tag = element.tagName.toLowerCase();
+    const named = {
+      nav: "Navigation",
+      header: "Header",
+      footer: "Footer",
+      aside: "Sidebar",
+      video: "Video",
+      iframe: "Embedded frame",
+      img: "Image",
+      form: "Form",
+      dialog: "Dialog"
+    };
+    const role = element.getAttribute("role");
+    if (named[tag]) {
+      return named[tag];
+    }
+    if (role) {
+      return role.charAt(0).toUpperCase() + role.slice(1);
+    }
+    const text = clean(element.textContent);
+    return text ? `“${text}”` : `${tag} element`;
+  }
+
   function enumerateSelectorCandidates(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) {
       return [];
@@ -81,6 +138,13 @@
     const testId = element.getAttribute("data-testid");
     if (testId) {
       candidates.push(`[data-testid="${cssEscape(testId)}"]`);
+    }
+
+    // Accessible names are tied to meaning, so they survive redesigns better
+    // than generated class names or DOM position.
+    const ariaLabel = element.getAttribute("aria-label");
+    if (ariaLabel && ariaLabel.length <= 80) {
+      candidates.push(`${element.tagName.toLowerCase()}[aria-label="${ariaLabel.replace(/["\\]/g, "\\$&")}"]`);
     }
 
     const classThree = buildClassSelector(element, 3);
@@ -107,6 +171,13 @@
     const pathSel = buildPathSelector(element);
     if (pathSel) {
       candidates.push(pathSel);
+    }
+
+    if (element.isConnected) {
+      const strictPath = buildStrictPathSelector(element);
+      if (strictPath) {
+        candidates.push(strictPath);
+      }
     }
 
     return Array.from(new Set(candidates)).filter(Boolean);
@@ -182,6 +253,8 @@
     enumerateSelectorCandidates,
     resolveUniqueSelector,
     buildFullClassSelector,
-    buildPathSelector
+    buildPathSelector,
+    buildStrictPathSelector,
+    describeElement
   };
 })(window);

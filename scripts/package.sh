@@ -16,6 +16,7 @@ rm -f "$OUT"
 cd "$ROOT"
 zip -r "$OUT" . \
   -x ".git/*" \
+  -x ".claude/*" \
   -x "dist/*" \
   -x "*.zip" \
   -x ".DS_Store" \

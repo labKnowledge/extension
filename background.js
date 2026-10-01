@@ -1,4 +1,8 @@
-importScripts("utils/constants.js");
+// Chrome runs this as a service worker; Firefox loads constants.js first via
+// manifest background.scripts, where importScripts does not exist.
+if (typeof QUIETVIEW === "undefined" && typeof importScripts === "function") {
+  importScripts("utils/constants.js");
+}
 
 const STORAGE_KEY = QUIETVIEW.storageKey;
 const LEGACY_STORAGE_KEY = QUIETVIEW.legacyStorageKey;
@@ -19,6 +23,7 @@ function normalizeRule(rule) {
     id: rule.id || crypto.randomUUID(),
     origin: rule.origin,
     selector: rule.selector,
+    label: typeof rule.label === "string" ? rule.label.slice(0, 80) : "",
     sourceType: rule.sourceType || "selector",
     enabled: typeof rule.enabled === "boolean" ? rule.enabled : true,
     hideMode: rule.hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone",
@@ -108,36 +113,41 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return;
     }
 
-    if (message.type === "EXPORT_RULES") {
+    if (message.type === "EXPORT_ALL") {
       const ruleMap = await getRuleMap();
-      const origin = message.origin;
-      sendResponse({
-        ok: true,
-        rules: ruleMap[origin] || [],
-        export: {
-          quietviewVersion: QUIETVIEW.exportFormatVersion,
-          origin,
-          exportedAt: new Date().toISOString(),
-          rules: ruleMap[origin] || []
-        }
-      });
+      sendResponse({ ok: true, ruleMap });
       return;
     }
 
     if (message.type === "IMPORT_RULES") {
-      const { origin, rules } = message;
-      if (!origin || !Array.isArray(rules)) {
-        sendResponse({ ok: false, error: "Import requires origin and rules array." });
+      // Accepts { origin: rules[] } maps. Merges into existing rules (never
+      // replaces), skipping selectors the site already has.
+      const incoming = message.ruleMap;
+      if (!incoming || typeof incoming !== "object") {
+        sendResponse({ ok: false, error: "Nothing to import." });
         return;
       }
 
       const ruleMap = await getRuleMap();
-      const normalized = rules
-        .filter((rule) => rule && typeof rule.selector === "string")
-        .map((rule) => normalizeRule({ ...rule, origin }));
-      ruleMap[origin] = normalized;
+      let added = 0;
+      for (const [origin, rules] of Object.entries(incoming)) {
+        if (!/^https?:\/\//.test(origin) || !Array.isArray(rules)) {
+          continue;
+        }
+        const existing = ruleMap[origin] || [];
+        const known = new Set(existing.map((rule) => rule.selector));
+        for (const rule of rules) {
+          if (!rule || typeof rule.selector !== "string" || known.has(rule.selector)) {
+            continue;
+          }
+          known.add(rule.selector);
+          existing.push(normalizeRule({ ...rule, id: undefined, origin }));
+          added += 1;
+        }
+        ruleMap[origin] = existing;
+      }
       await setRuleMap(ruleMap);
-      sendResponse({ ok: true, rules: normalized });
+      sendResponse({ ok: true, added });
       return;
     }
 
@@ -149,8 +159,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+const COMMAND_INTENTS = {
+  "start-picker": "hide",
+  "focus-element": "focus"
+};
+
+async function sendToTab(tabId, message) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, message);
+  } catch (_error) {
+    // Tab was open before install/update: inject, then retry once.
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: QUIETVIEW.contentScripts
+    });
+    return chrome.tabs.sendMessage(tabId, message);
+  }
+}
+
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command !== "start-picker") {
+  const intent = COMMAND_INTENTS[command];
+  if (!intent) {
     return;
   }
   const tabId = await getActiveTabId();
@@ -158,8 +187,8 @@ chrome.commands.onCommand.addListener(async (command) => {
     return;
   }
   try {
-    await chrome.tabs.sendMessage(tabId, { type: "START_PICKER" });
+    await sendToTab(tabId, { type: "START_PICKER", intent });
   } catch (_error) {
-    // Ignore if active tab has no content script context.
+    // Restricted page (browser settings, store pages): nothing to pick.
   }
 });

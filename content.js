@@ -189,26 +189,57 @@ function hideAll() {
   applyAllRules(true);
 }
 
-function showToast(message, isError = false) {
+// Single toast surface for every page-side message. An optional action
+// (e.g. Undo) turns it into a one-click recovery path.
+function showToast(message, options = {}) {
+  const { isError = false, action = null } = options;
+  document.getElementById("quietview-toast")?.remove();
+
   const toast = document.createElement("div");
-  toast.textContent = message;
-  toast.setAttribute("role", "status");
+  toast.id = "quietview-toast";
+  toast.setAttribute("role", isError ? "alert" : "status");
   Object.assign(toast.style, {
     position: "fixed",
     bottom: "16px",
     left: "50%",
     transform: "translateX(-50%)",
     zIndex: "2147483647",
-    maxWidth: "min(90vw, 420px)",
+    maxWidth: "min(90vw, 440px)",
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
     padding: "10px 14px",
-    borderRadius: "8px",
-    font: "13px/1.4 system-ui, sans-serif",
+    borderRadius: "10px",
+    font: "13px/1.4 system-ui, -apple-system, sans-serif",
     color: "#fff",
-    background: isError ? QUIETVIEW.colors.toastError : QUIETVIEW.colors.toastOk,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.25)"
+    background: isError ? QUIETVIEW.colors.toastError : QUIETVIEW.colors.toastBg,
+    boxShadow: "0 6px 20px rgba(0,0,0,0.25)"
   });
+
+  const text = document.createElement("span");
+  text.textContent = message;
+  toast.appendChild(text);
+
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = action.label;
+    Object.assign(button.style, {
+      all: "unset",
+      cursor: "pointer",
+      fontWeight: "600",
+      color: QUIETVIEW.colors.accentLight
+    });
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toast.remove();
+      action.onClick();
+    });
+    toast.appendChild(button);
+  }
+
   document.documentElement.appendChild(toast);
-  window.setTimeout(() => toast.remove(), isError ? 6000 : 3000);
+  window.setTimeout(() => toast.remove(), isError || action ? 6000 : 3000);
 }
 
 function toggleQuietView() {
@@ -224,11 +255,11 @@ function toggleQuietView() {
   if (isQuietViewEnabled) {
     showAll();
     isQuietViewEnabled = false;
-    showToast(`${QUIETVIEW.name}: All elements shown.`);
+    showToast("Showing everything QuietView hid on this site.");
   } else {
     hideAll();
     isQuietViewEnabled = true;
-    showToast(`${QUIETVIEW.name}: All elements hidden.`);
+    showToast("Hidden again.");
   }
 
   updateFloatingButton();
@@ -466,7 +497,12 @@ function ensureObserver() {
   if (observer) {
     return;
   }
-  observer = new MutationObserver(() => scheduleApplyAll());
+  observer = new MutationObserver(() => {
+    if (window.QuietViewFocus.isActive() && !window.QuietViewFocus.checkConnected()) {
+      showToast("The page replaced that element, so focus ended.");
+    }
+    scheduleApplyAll();
+  });
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true
@@ -511,173 +547,325 @@ async function refreshRules() {
   showFloatingButtonIfNeeded();
 }
 
+// Local-only usage counters; used solely to time the one-off rating prompt.
+async function bumpStat(key) {
+  try {
+    const data = await chrome.storage.local.get(QUIETVIEW.statsKey);
+    const stats = data[QUIETVIEW.statsKey] || {};
+    stats[key] = (stats[key] || 0) + 1;
+    await chrome.storage.local.set({ [QUIETVIEW.statsKey]: stats });
+  } catch (_err) {
+    // Counters are best-effort.
+  }
+}
+
+async function getHideModePreference() {
+  try {
+    const data = await chrome.storage.local.get(QUIETVIEW.prefsKey);
+    return data[QUIETVIEW.prefsKey]?.hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone";
+  } catch (_err) {
+    return "displayNone";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Picker: one overlay for both intents.
+//   intent "hide"  -> saves a per-site rule
+//   intent "focus" -> makes the element fill the screen (not saved)
+// Mouse picks the element under the pointer; ↑ / ↓ grow or shrink the
+// selection to the parent / back to the child, so users can grab a whole
+// panel without needing to aim at its edge.
+// ---------------------------------------------------------------------------
+
+const PICKER_COPY = {
+  hide: { verb: "hide", color: () => QUIETVIEW.colors.pickerOutline },
+  focus: { verb: "focus", color: () => QUIETVIEW.colors.focusOutline }
+};
+
+function isQuietViewUi(el) {
+  return Boolean(
+    el &&
+      el.closest &&
+      el.closest("#quietview-toast, #quietview-picker-hint, #quietview-picker-outline, #" + FLOATING_BTN_ID)
+  );
+}
+
 function pickElementAtPoint(x, y) {
-  if (pickerState?.outlineEl) {
-    pickerState.outlineEl.style.display = "none";
-  }
   const el = document.elementFromPoint(x, y);
-  if (pickerState?.outlineEl) {
-    pickerState.outlineEl.style.display = "block";
-  }
-  if (!el || el === pickerState?.outlineEl) {
+  if (!el || isQuietViewUi(el) || el === document.documentElement || el === document.body) {
     return null;
   }
   return el;
 }
 
-function updateOutline(target) {
-  if (!pickerState || !pickerState.outlineEl || !target) {
+const FOCUS_MEDIA = /^(VIDEO|IFRAME|CANVAS|EMBED|OBJECT)$/;
+const FOCUS_MIN_VIEWPORT_SHARE = 0.15;
+
+// Focusing a play button or a single line of text is never the intent: climb
+// to the nearest media element or container big enough to be worth a full
+// screen. Returns the skipped chain so ↓ can step back down.
+function suggestFocusTarget(pointed) {
+  const viewportArea = window.innerWidth * window.innerHeight;
+  const skipped = [];
+  let current = pointed;
+  while (current && current !== document.body && current !== document.documentElement) {
+    const rect = current.getBoundingClientRect();
+    if (FOCUS_MEDIA.test(current.tagName) || (rect.width * rect.height) / viewportArea >= FOCUS_MIN_VIEWPORT_SHARE) {
+      return { target: current, skipped };
+    }
+    skipped.push(current);
+    current = current.parentElement;
+  }
+  return { target: pointed, skipped: [] };
+}
+
+function describeTarget(el) {
+  const rect = el.getBoundingClientRect();
+  const label = window.QuietViewSelector.describeElement(el);
+  return `${label} · ${Math.round(rect.width)}×${Math.round(rect.height)}`;
+}
+
+function renderPickerTarget() {
+  if (!pickerState) {
+    return;
+  }
+  const { target, outlineEl, labelEl } = pickerState;
+  if (!target) {
+    outlineEl.style.display = "none";
     return;
   }
   const rect = target.getBoundingClientRect();
-  const outline = pickerState.outlineEl;
-  outline.style.left = `${rect.left + window.scrollX}px`;
-  outline.style.top = `${rect.top + window.scrollY}px`;
-  outline.style.width = `${rect.width}px`;
-  outline.style.height = `${rect.height}px`;
+  Object.assign(outlineEl.style, {
+    display: "block",
+    left: `${rect.left}px`,
+    top: `${rect.top}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`
+  });
+  labelEl.textContent = describeTarget(target);
 }
 
-function notifyPickerResult(result) {
-  const text = result.ok
-    ? `${QUIETVIEW.name}: element hidden.`
-    : result.error || `${QUIETVIEW.name}: could not save rule.`;
-  const isError = !result.ok;
+function createPickerChrome(intent) {
+  const color = PICKER_COPY[intent].color();
+  const verb = PICKER_COPY[intent].verb;
 
-  if (typeof chrome !== "undefined" && chrome.storage?.session) {
-    chrome.storage.session
-      .set({
-        [QUIETVIEW.pickerStatusKey]: {
-          text,
-          isError,
-          timestamp: Date.now()
-        }
-      })
-      .catch(() => {});
-  }
-
-  const toast = document.createElement("div");
-  toast.textContent = text;
-  toast.setAttribute("role", "status");
-  Object.assign(toast.style, {
+  const outlineEl = document.createElement("div");
+  outlineEl.id = "quietview-picker-outline";
+  Object.assign(outlineEl.style, {
     position: "fixed",
-    bottom: "16px",
+    display: "none",
+    border: `2px solid ${color}`,
+    background: `${color}1f`,
+    borderRadius: "4px",
+    pointerEvents: "none",
+    zIndex: "2147483647",
+    transition: "left 60ms, top 60ms, width 60ms, height 60ms"
+  });
+
+  const hintEl = document.createElement("div");
+  hintEl.id = "quietview-picker-hint";
+  hintEl.setAttribute("role", "status");
+  Object.assign(hintEl.style, {
+    position: "fixed",
+    top: "12px",
     left: "50%",
     transform: "translateX(-50%)",
     zIndex: "2147483647",
-    maxWidth: "min(90vw, 420px)",
-    padding: "10px 14px",
-    borderRadius: "8px",
-    font: "13px/1.4 system-ui, sans-serif",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "2px",
+    maxWidth: "min(92vw, 560px)",
+    padding: "8px 14px",
+    borderRadius: "10px",
+    background: "rgba(17, 24, 39, 0.9)",
     color: "#fff",
-    background: isError ? QUIETVIEW.colors.toastError : QUIETVIEW.colors.toastOk,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.25)"
+    font: "13px/1.4 system-ui, -apple-system, sans-serif",
+    boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
+    pointerEvents: "none",
+    textAlign: "center"
   });
-  document.documentElement.appendChild(toast);
-  window.setTimeout(() => toast.remove(), isError ? 6000 : 3000);
+  const instructions = document.createElement("div");
+  instructions.textContent = `Click to ${verb} · ↑ bigger · ↓ smaller · Enter to confirm · Esc to cancel`;
+  const labelEl = document.createElement("div");
+  Object.assign(labelEl.style, { color: color, fontWeight: "600", fontSize: "12px" });
+  labelEl.textContent = `Point at what you want to ${verb}`;
+  hintEl.append(instructions, labelEl);
+
+  document.documentElement.append(outlineEl, hintEl);
+  return { outlineEl, hintEl, labelEl };
 }
 
 function stopPicker() {
   if (!pickerState) {
     return;
   }
-  if (pickerState.onMouseMove) {
-    document.removeEventListener("mousemove", pickerState.onMouseMove, true);
-  }
-  if (pickerState.onClick) {
-    document.removeEventListener("click", pickerState.onClick, true);
-  }
-  if (pickerState.onKeyDown) {
-    document.removeEventListener("keydown", pickerState.onKeyDown, true);
-  }
-  if (pickerState.outlineEl && typeof pickerState.outlineEl.remove === "function") {
-    pickerState.outlineEl.remove();
-  }
+  document.removeEventListener("mousemove", pickerState.onMouseMove, true);
+  document.removeEventListener("click", pickerState.onClick, true);
+  document.removeEventListener("keydown", pickerState.onKeyDown, true);
+  window.removeEventListener("scroll", pickerState.onScroll, true);
+  pickerState.outlineEl.remove();
+  pickerState.hintEl.remove();
   pickerState = null;
 }
 
-function startPicker(hideMode) {
+async function commitHide(target) {
+  const resolved = window.QuietViewSelector.resolveUniqueSelector(target, document.documentElement);
+  if (!resolved.selector || resolved.matchCount !== 1) {
+    showToast("Couldn't target that element. Try ↑ to select its container.", { isError: true });
+    return;
+  }
+  const rules = await saveRule({
+    origin: currentOrigin,
+    selector: resolved.selector,
+    label: window.QuietViewSelector.describeElement(target),
+    sourceType: "picker",
+    enabled: true,
+    hideMode: await getHideModePreference()
+  });
+  const created = rules[rules.length - 1];
+  currentRules = rules;
+  applyAllRules(true);
+  showFloatingButtonIfNeeded();
+  bumpStat("hides");
+  showToast("Hidden. It stays hidden on this site.", {
+    action: {
+      label: "Undo",
+      onClick: async () => {
+        removeRuleFromDom(created.id);
+        currentRules = await deleteRule(currentOrigin, created.id);
+        showFloatingButtonIfNeeded();
+      }
+    }
+  });
+}
+
+function commitFocus(target) {
+  // Called synchronously inside the click/keydown handler so the browser
+  // treats it as a user gesture and allows native fullscreen.
+  bumpStat("focuses");
+  window.QuietViewFocus.enter(target).then((mode) => {
+    if (mode === "tab") {
+      showToast("Focused. Press Esc to exit.");
+    }
+  });
+}
+
+function commitPicker() {
+  if (!pickerState || !pickerState.target) {
+    return;
+  }
+  const { target, intent } = pickerState;
   stopPicker();
+  if (intent === "focus") {
+    commitFocus(target);
+    return;
+  }
+  commitHide(target).catch((error) => {
+    showToast(error.message || "Could not save that rule.", { isError: true });
+  });
+}
 
-  const outlineEl = document.createElement("div");
-  outlineEl.style.position = "absolute";
-  outlineEl.style.border = `2px solid ${QUIETVIEW.colors.pickerOutline}`;
-  outlineEl.style.background = `rgba(${QUIETVIEW.colors.accentRgb}, 0.12)`;
-  outlineEl.style.pointerEvents = "none";
-  outlineEl.style.zIndex = "2147483647";
-  document.documentElement.appendChild(outlineEl);
+function startPicker(intent = "hide") {
+  stopPicker();
+  if (intent === "focus" && window.QuietViewFocus.isActive()) {
+    window.QuietViewFocus.exit();
+  }
 
-  const onMouseMove = (event) => {
-    const target = pickElementAtPoint(event.clientX, event.clientY);
-    if (!target) {
+  const pickerUi = createPickerChrome(intent);
+
+  const setTarget = (el, { fromPointer = false } = {}) => {
+    if (!pickerState || !el) {
       return;
     }
-    pickerState.lastTarget = target;
-    updateOutline(target);
+    if (fromPointer) {
+      // Ignore pointer jitter inside a selection the user grew with ↑.
+      if (pickerState.pointed === el) {
+        return;
+      }
+      pickerState.pointed = el;
+      pickerState.history = [];
+      if (pickerState.intent === "focus") {
+        const suggestion = suggestFocusTarget(el);
+        pickerState.history = suggestion.skipped;
+        el = suggestion.target;
+      }
+    }
+    pickerState.target = el;
+    renderPickerTarget();
   };
 
-  const onClick = async (event) => {
+  const onMouseMove = (event) => {
+    setTarget(pickElementAtPoint(event.clientX, event.clientY), { fromPointer: true });
+  };
+
+  const onClick = (event) => {
     event.preventDefault();
     event.stopPropagation();
-    const target = pickElementAtPoint(event.clientX, event.clientY) || pickerState.lastTarget;
-    if (!target) {
-      return;
+    event.stopImmediatePropagation();
+    if (!pickerState.target) {
+      setTarget(pickElementAtPoint(event.clientX, event.clientY), { fromPointer: true });
     }
-    const resolved = window.QuietViewSelector.resolveUniqueSelector(
-      target,
-      document.documentElement
-    );
-    if (!resolved.selector) {
-      stopPicker();
-      notifyPickerResult({
-        ok: false,
-        error: "Could not build a selector for this element."
-      });
-      return;
-    }
-    if (resolved.ambiguous || resolved.matchCount !== 1) {
-      stopPicker();
-      notifyPickerResult({
-        ok: false,
-        error: `Selector matched ${resolved.matchCount} elements. Pick a more specific child, or use a snippet with id or data-testid.`,
-        selector: resolved.selector,
-        matchCount: resolved.matchCount
-      });
-      return;
-    }
-
-    const selector = resolved.selector;
-
-    const rule = {
-      origin: currentOrigin,
-      selector,
-      sourceType: "picker",
-      enabled: true,
-      hideMode: pickerState.hideMode || "displayNone"
-    };
-    currentRules = await saveRule(rule);
-    applyAllRules(true);
-    stopPicker();
-    notifyPickerResult({ ok: true, selector, matchCount: resolved.matchCount });
+    commitPicker();
   };
 
   const onKeyDown = (event) => {
+    if (!pickerState) {
+      return;
+    }
+    const { target } = pickerState;
     if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
       stopPicker();
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      commitPicker();
+      return;
+    }
+    if (event.key === "ArrowUp" && target) {
+      event.preventDefault();
+      event.stopPropagation();
+      const parent = target.parentElement;
+      if (parent && parent !== document.body && parent !== document.documentElement) {
+        pickerState.history.push(target);
+        setTarget(parent);
+      }
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      event.stopPropagation();
+      const previous = pickerState.history.pop();
+      if (previous) {
+        setTarget(previous);
+      } else if (target && target.firstElementChild) {
+        setTarget(target.firstElementChild);
+      }
     }
   };
 
+  const onScroll = () => renderPickerTarget();
+
   pickerState = {
-    outlineEl,
+    intent: intent === "focus" ? "focus" : "hide",
+    target: null,
+    pointed: null,
+    history: [],
     onMouseMove,
     onClick,
     onKeyDown,
-    lastTarget: null,
-    hideMode: hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone"
+    onScroll,
+    ...pickerUi
   };
 
   document.addEventListener("mousemove", onMouseMove, true);
   document.addEventListener("click", onClick, true);
   document.addEventListener("keydown", onKeyDown, true);
+  window.addEventListener("scroll", onScroll, true);
 }
 
 function findBestSelectorFromSnippet(snippet) {
@@ -713,7 +901,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     if (message.type === "START_PICKER") {
-      startPicker(message.hideMode);
+      startPicker(message.intent === "focus" ? "focus" : "hide");
+      sendResponse({ ok: true });
+      return;
+    }
+
+    if (message.type === "EXIT_FOCUS") {
+      window.QuietViewFocus.exit();
       sendResponse({ ok: true });
       return;
     }
@@ -732,13 +926,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       const count = document.querySelectorAll(selector).length;
       if (count === 0) {
-        sendResponse({ ok: false, error: "Selector matched 0 elements on this page." });
+        sendResponse({ ok: false, error: "Nothing on this page matches that selector." });
         return;
       }
       if (count > 1) {
         sendResponse({
           ok: false,
-          error: `Selector matched ${count} elements. Use a more specific selector.`
+          error: `That selector matches ${count} elements. Make it more specific so only one matches.`
         });
         return;
       }
@@ -746,10 +940,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       currentRules = await saveRule({
         origin: currentOrigin,
         selector,
+        label: window.QuietViewSelector.describeElement(document.querySelector(selector)),
         sourceType: message.sourceType || "selector",
         enabled: true,
-        hideMode: message.hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone"
+        hideMode: await getHideModePreference()
       });
+      showFloatingButtonIfNeeded();
       applyAllRules(true);
       sendResponse({ ok: true, rules: currentRules, matched: count });
       return;
@@ -770,7 +966,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (resolved.ambiguous || resolved.matchCount !== 1) {
         sendResponse({
           ok: false,
-          error: `Derived selector matched ${resolved.matchCount} elements. Paste a more specific element or one with id/data-testid.`,
+          error: `That snippet matches ${resolved.matchCount} elements on this page. Paste a more specific element, or use “Hide an element” and click it instead.`,
           selector: resolved.selector,
           matched: resolved.matchCount
         });
@@ -782,10 +978,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       currentRules = await saveRule({
         origin: currentOrigin,
         selector,
+        label: window.QuietViewSelector.describeElement(document.querySelector(selector)),
         sourceType: "snippet",
         enabled: true,
-        hideMode: message.hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone"
+        hideMode: await getHideModePreference()
       });
+      showFloatingButtonIfNeeded();
       applyAllRules(true);
       sendResponse({ ok: true, rules: currentRules, selector, matched });
       return;

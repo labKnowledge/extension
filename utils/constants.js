@@ -1,11 +1,15 @@
 (function initQuietViewConstants(global) {
   const QUIETVIEW = {
     name: "QuietView",
-    tagline: "Hide clutter. Keep your view quiet.",
-    version: "1.0.1",
+    tagline: "Hide what distracts you. Focus on what matters.",
+    version: "1.1.0",
     exportPrefix: "quietview-rules",
-    exportFormatVersion: 1,
-    pickerStatusKey: "quietviewPickerStatus",
+    exportFormatVersion: 2,
+    prefsKey: "quietViewPrefs",
+    seedKey: "quietViewSeeded",
+    statsKey: "quietViewStats",
+    firefoxId: "quietview@eligapris.com",
+    contentScripts: ["utils/constants.js", "utils/selector.js", "utils/focus.js", "content.js"],
     storageKey: "quietViewRules",
     legacyStorageKey: "areaHiderRules",
     publisher: {
@@ -18,8 +22,10 @@
     colors: {
       accent: "#2d8f8f",
       accentRgb: "45, 143, 143",
+      accentLight: "#7fdede",
       pickerOutline: "#2d8f8f",
-      toastOk: "#2d8f8f",
+      focusOutline: "#7c5cff",
+      toastBg: "#1f2937",
       toastError: "#b3261e",
       surface: "#f4f6f8",
       text: "#1e293b",

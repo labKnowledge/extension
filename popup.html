@@ -9,55 +9,111 @@
   <body>
     <main class="wrap">
       <header class="brand-header">
-        <img class="brand-icon" src="icons/icon-32.png" width="32" height="32" alt="" />
-        <div class="brand-text">
-          <h1>QuietView</h1>
-          <p class="tagline">Hide clutter. Keep your view quiet.</p>
-        </div>
+        <img class="brand-icon" src="icons/icon-32.png" width="28" height="28" alt="" />
+        <h1>QuietView</h1>
+        <span id="siteLabel" class="site-label" title=""></span>
       </header>
-      <p id="originLabel" class="origin">Loading...</p>
 
-      <section class="panel">
-        <h2>Pick on page</h2>
-        <div class="mode-row">
-          <label for="hideModeSelect">Hide mode</label>
-          <select id="hideModeSelect">
-            <option value="displayNone">Display none</option>
-            <option value="visibilityHidden">Visibility hidden</option>
-          </select>
-        </div>
+      <section class="actions" aria-label="Actions">
+        <button id="hideBtn" class="action action-hide" type="button">
+          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+            <path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13.2 13.2 0 0 1-1.67 2.68" />
+            <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.39-1.61" />
+            <line x1="2" y1="2" x2="22" y2="22" />
+          </svg>
+          <span class="action-text">
+            <span class="action-title">Hide an element</span>
+            <span class="action-desc">Click anything on the page. It stays hidden here.</span>
+          </span>
+          <kbd id="hideShortcut" class="action-kbd"></kbd>
+        </button>
+        <button id="focusBtn" class="action action-focus" type="button">
+          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+            <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+            <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+            <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+            <rect x="8" y="8" width="8" height="8" rx="1" />
+          </svg>
+          <span class="action-text">
+            <span class="action-title">Focus on an element</span>
+            <span class="action-desc">Make one part of the page fill your screen.</span>
+          </span>
+          <kbd id="focusShortcut" class="action-kbd"></kbd>
+        </button>
+      </section>
+
+      <div id="reviewPrompt" class="review" hidden>
+        <p>Is QuietView helping you focus? A quick rating helps other people find it.</p>
         <div class="row">
-          <button id="startPickerBtn" type="button">Start picker</button>
-          <button id="cancelPickerBtn" class="secondary" type="button">Cancel</button>
+          <a id="reviewLink" class="btn btn-small" href="#" target="_blank" rel="noopener noreferrer">Rate QuietView</a>
+          <button id="reviewDismiss" class="btn-ghost btn-small" type="button">Not now</button>
         </div>
-      </section>
+      </div>
 
-      <section class="panel">
-        <h2>Add by selector</h2>
-        <input id="selectorInput" type="text" placeholder='e.g. [data-testid="chatlist-header"]' />
-        <button id="addSelectorBtn" type="button">Add selector rule</button>
-      </section>
-
-      <section class="panel">
-        <h2>Add by pasted HTML</h2>
-        <textarea id="snippetInput" placeholder="Paste a target HTML element snippet here..."></textarea>
-        <button id="addSnippetBtn" type="button">Add snippet rule</button>
-      </section>
-
-      <section class="panel">
-        <h2>Rules</h2>
-        <div class="row">
-          <button id="exportRulesBtn" class="secondary" type="button">Export JSON</button>
-          <button id="importRulesBtn" class="secondary" type="button">Import JSON</button>
-          <input id="importRulesFile" type="file" accept="application/json" hidden />
+      <section class="panel" aria-labelledby="hiddenHeading">
+        <div class="panel-head">
+          <h2 id="hiddenHeading">Hidden on this site</h2>
+          <span id="hiddenCount" class="count" hidden></span>
         </div>
-        <div id="rulesList" class="rules"></div>
+        <ul id="siteRules" class="rules"></ul>
       </section>
 
-      <p id="status" class="status" role="status"></p>
+      <details id="otherSites" class="disclosure" hidden>
+        <summary>Other sites <span id="otherCount" class="count"></span></summary>
+        <div id="otherSitesList" class="other-sites"></div>
+      </details>
+
+      <details class="disclosure">
+        <summary>More options</summary>
+        <div class="options">
+          <fieldset class="option">
+            <legend>When hiding an element</legend>
+            <label class="radio">
+              <input type="radio" name="hideMode" value="displayNone" checked />
+              <span>Remove it and close the gap</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="hideMode" value="visibilityHidden" />
+              <span>Leave an empty space (layout stays the same)</span>
+            </label>
+          </fieldset>
+
+          <form id="selectorForm" class="option">
+            <label for="selectorInput">Hide by CSS selector</label>
+            <div class="inline">
+              <input id="selectorInput" type="text" spellcheck="false" placeholder='[data-testid="sidebar"]' />
+              <button class="btn btn-small" type="submit">Hide</button>
+            </div>
+          </form>
+
+          <form id="snippetForm" class="option">
+            <label for="snippetInput">Hide by pasted HTML</label>
+            <textarea id="snippetInput" spellcheck="false" placeholder="Paste the element's HTML from DevTools"></textarea>
+            <button class="btn btn-small" type="submit">Hide</button>
+          </form>
+
+          <div class="option">
+            <span class="option-label">Back up or move your rules</span>
+            <div class="row">
+              <button id="exportBtn" class="btn-ghost btn-small" type="button">Export all sites</button>
+              <button id="importBtn" class="btn-ghost btn-small" type="button">Import</button>
+              <input id="importFile" type="file" accept="application/json,.json" hidden />
+            </div>
+          </div>
+
+          <button id="shortcutsBtn" class="link-btn" type="button">Change keyboard shortcuts</button>
+        </div>
+      </details>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+
       <footer class="footer">
         <a id="privacyLink" href="#" target="_blank" rel="noopener noreferrer">Privacy</a>
-        <span class="footer-sep" aria-hidden="true">·</span>
+        <span aria-hidden="true">·</span>
+        <a id="rateLink" href="#" target="_blank" rel="noopener noreferrer">Rate</a>
+        <span aria-hidden="true">·</span>
         <a id="publisherLink" href="#" target="_blank" rel="noopener noreferrer">Eligapris</a>
       </footer>
     </main>

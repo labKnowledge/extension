@@ -1,11 +1,17 @@
 # QuietView
 
-**Hide clutter. Keep your view quiet.**
+**Hide what distracts you. Focus on what matters.**
 
-QuietView is a browser extension by [Eligapris](https://eligapris.com) that lets you hide distracting page elements on any website — chat sidebars, news feeds, cookie banners, dashboard widgets, and more. Point at what you want gone, and your rules persist per site.
+QuietView is a browser extension by [Eligapris](https://eligapris.com) with two actions:
+
+- **Hide an element:** click anything on a page (a feed, sidebar, banner or widget) and it stays hidden on that site.
+- **Focus on an element:** click a video, chat, article or chart and it fills your screen. Press Esc to come back.
+
+No CSS, no account, and nothing leaves your browser.
 
 - **Product page:** https://eligapris.com/quietview
 - **Support:** support@eligapris.com
+- **Roadmap and growth tracker:** [PROGRESS.md](PROGRESS.md) · [docs/FEATURES.md](docs/FEATURES.md) · [docs/MARKET_RESEARCH.md](docs/MARKET_RESEARCH.md)
 
 ## Install
 
@@ -39,36 +45,18 @@ cd extension
 web-ext run
 ```
 
-## Use cases
-
-- **WhatsApp Web** — hide the chat list or header for a focused conversation view
-- **Social feeds** — remove trending sidebars and recommendation panels
-- **Dashboards** — strip widgets you never use
-- **Any site** — hide cookie banners, promo bars, or noisy UI chrome
-
 ## Features
 
-- **Element picker** — click any element on the page to hide it
-- **CSS selector rules** — paste a selector for precise control
-- **HTML snippet rules** — paste an element snippet; QuietView derives a unique selector
-- **Hide modes** — `display: none` (removes layout space) or `visibility: hidden` (preserves layout)
-- **Per-site persistence** — rules saved by origin (e.g. `https://web.whatsapp.com`)
-- **Export / import** — share rules as JSON across machines or browsers
-- **Keyboard shortcut** — `Ctrl+Shift+Y` / `Cmd+Shift+Y` to start the picker
-- **SPA support** — rules re-apply as dynamic pages update
+- **Picker for Hide and Focus:** hover to outline, **↑ / ↓** to select the parent or child, click or Enter to confirm, Esc to cancel
+- **Focus mode:** native fullscreen when allowed, in-tab fill otherwise; black letterbox for media; Esc or "Exit focus" restores the page exactly
+- **Undo** after every hide and every removal
+- **Per-site persistence** with re-apply on single-page apps
+- **Readable rule names** and stable-first selectors (id → data-testid → aria-label → classes → exact path)
+- **Floating toggle** to show everything again on pages with rules
+- **More options:** remove vs. keep space, CSS selector rules, HTML snippet rules, export all / merge import
+- **Shortcuts:** Alt+Shift+H (hide), Alt+Shift+F (focus). Change them at `chrome://extensions/shortcuts`
 
-On WhatsApp Web, a default hide rule is auto-seeded for the chat list sidebar if none exists.
-
-## How to use
-
-1. Open a target website tab (for example WhatsApp Web).
-2. Click the QuietView extension icon.
-3. Choose one of:
-   - **Start picker** — click an element on the page (popup closes; toast shows result).
-   - **Add selector rule** — paste a CSS selector (must match exactly one element).
-   - **Add snippet rule** — paste an HTML element snippet.
-   - Select hide mode before creating a rule.
-4. In **Rules**: Show / Hide / Delete, or Export / Import JSON.
+On WhatsApp Web, a default rule that hides the chat list is added once. Deleting it is respected.
 
 ## Privacy
 
@@ -79,10 +67,11 @@ QuietView stores rules locally only; no remote data collection.
 
 ## Pre-release QA checklist
 
-1. Load unpacked in Chrome — icon, popup header, picker, snippet, export/import
-2. Load temporary add-on in Firefox — same flows + keyboard shortcut
-3. WhatsApp Web — sidebar hide matches **one** element only
-4. Legacy upgrade — existing `areaHiderRules` in storage still loads
+1. Load unpacked in Chrome: Hide (click, ↑ + Enter, Undo), Focus (Esc, Exit button, video letterbox), popup rules, export/import
+2. Load temporary add-on in Firefox: same flows plus both shortcuts
+3. WhatsApp Web: default rule appears once; delete it, reopen the popup, and confirm it stays deleted
+4. YouTube: focus the player; hide the Shorts shelf and reload
+5. Legacy upgrade: existing `areaHiderRules` in storage still loads
 
 ## Build release zip
 
@@ -90,7 +79,7 @@ QuietView stores rules locally only; no remote data collection.
 ./scripts/package.sh
 ```
 
-Output: `dist/quietview-1.0.1.zip` for Chrome Web Store and Firefox AMO upload.
+Output: `dist/quietview-<version>.zip` for Chrome Web Store and Firefox AMO upload.
 
 ## Generate all assets (icons, screenshots, store graphics)
 
@@ -120,9 +109,10 @@ Requires ImageMagick (`convert`) or `rsvg-convert`.
 
 - `utils/constants.js` — brand name, colors, storage keys
 - `background.js` — storage CRUD, legacy migration from `areaHiderRules`
-- `content.js` — applies/restores rules, picker overlay, unique selector validation
-- `utils/selector.js` — selector generation and snippet candidates
-- `popup.js` — UI and tab messaging
+- `content.js`: applies and restores rules, the shared Hide/Focus picker, toasts, floating toggle
+- `utils/focus.js`: Focus mode (fullscreen plus in-tab fallback, exit control, clean restore)
+- `utils/selector.js`: stable-first selector generation, readable element names
+- `popup.js`: popup UI and tab messaging
 
 ## License
 

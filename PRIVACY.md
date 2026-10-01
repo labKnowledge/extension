@@ -1,10 +1,10 @@
 # QuietView Privacy Policy
 
-**Last updated:** June 2026  
+**Last updated:** October 2026  
 **Operator:** [Eligapris](https://eligapris.com)  
 **Canonical URL:** https://eligapris.com/quietview/privacy
 
-QuietView is a browser extension that hides page elements you choose. This policy describes how the extension handles information.
+QuietView is a browser extension that hides page elements you choose, or makes one element fill your screen (Focus mode). This policy describes how the extension handles information.
 
 ## Summary
 
@@ -18,7 +18,11 @@ When you create hide rules (via picker, CSS selector, or HTML snippet), QuietVie
 
 - Site origin (e.g. `https://example.com`)
 - CSS selector string
-- Rule metadata (enabled state, hide mode, source type, timestamps)
+- Rule metadata (a short readable name for the element, enabled state, hide mode, source type, timestamps)
+- Your preferences (for example, whether hidden elements leave an empty space) and the position of the on-page toggle button
+- Two local counters: how many times you have hidden or focused an element. They are used only to decide when to show a one-time "rate QuietView" prompt, and are never sent anywhere
+
+Focus mode does not store anything. It only changes how the current page is displayed until you exit.
 
 This data remains on your device unless you export it manually as JSON.
 
