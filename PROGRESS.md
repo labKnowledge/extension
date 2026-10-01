@@ -12,8 +12,8 @@ Feature details: [`docs/FEATURES.md`](docs/FEATURES.md) · Why we're doing this:
 
 | Week of | Users (CWS + AMO) | Target | Installs / wk | Uninstalls / wk | Rating (count) | Listing CTR | Notes |
 |---|---|---|---|---|---|---|---|
-| 2026-09-28 | ~10 | 10 | | | | | Baseline. v1.1 built. |
-| 2026-10-05 | | 25 | | | | | v1.1 live on CWS + AMO + Edge |
+| 2026-09-28 | ~10 | 10 | | | | | Baseline. 1.0.1 live on CWS; 1.2 built. |
+| 2026-10-05 | | 25 | | | | | v1.2 live on CWS + AMO + Edge |
 | 2026-10-12 | | 50 | | | | | Directories + Reddit answers |
 | 2026-10-19 | | 90 | | | | | Show HN |
 | 2026-10-26 | | 150 | | | | | Product Hunt |
@@ -45,18 +45,20 @@ Product
 - [x] One-time rating prompt plus a footer "Rate" link
 - [x] Store-keyword name and short description in the manifest
 - [ ] Manual QA on Chrome and Firefox: WhatsApp Web, YouTube (focus the player), Gmail, Reddit, a news site
-- [ ] Welcome page on first install with a hands-on demo (P0)
+- [x] Welcome page on first install with a hands-on demo
 
 Store
 - [ ] New screenshots 5 × 1280×800: ① Focus a YouTube player ② Hide a feed (before/after) ③ Picker with ↑ hint ④ Popup rules list ⑤ "Nothing leaves your browser"
 - [ ] 1400×560 marquee, 440×280 tile
 - [ ] 30-second demo video (YouTube, unlisted is fine) linked on the listing
 - [ ] Rewrite the long description using `docs/STORE_LISTING.md` v1.1 copy
-- [ ] Publish v1.1 on CWS
+- [x] Listing live on CWS (1.0.1): https://chromewebstore.google.com/detail/quietview/eljnmldcepcadaapeabdppafpcpgncka
+- [ ] Upload v1.2.0 to CWS (`./scripts/package.sh` → `dist/quietview-1.2.0.zip`). The new `contextMenus` permission doesn't trigger a warning
 - [ ] Publish on Firefox AMO (almost no competition there)
 - [ ] Publish on Edge Add-ons
 - [ ] Verify the publisher domain (eligapris.com) in the CWS dashboard
-- [ ] Put the real store URLs into `eligapris-site` (`/quietview` install buttons, `products.ts`) and the README
+- [x] CWS URL in `eligapris-site` (`/quietview`, `products.ts`) and the README
+- [ ] Firefox URL once the AMO listing is live
 
 Website
 - [x] QuietView added to the eligapris.com product catalog (/products, /products/quietview, home showcase, sitemap, analytics paths, SEO defaults)
@@ -77,11 +79,14 @@ Website
 ## Phase 3: Compounding (Nov 2 – Dec 31)
 
 Product
-- [ ] Recipes v1: YouTube, X, LinkedIn, Reddit, Facebook, Instagram, WhatsApp, Gmail, news sticky bars (P0)
-- [ ] Remember focus per site (P0)
-- [ ] Self-healing rules plus a "needs re-pick" badge (P0)
-- [ ] Toolbar badge with the hidden count; right-click Hide/Focus (P1)
-- [ ] Hide similar; blur mode (P1)
+- [x] Recipes v1: YouTube, Reddit, X, Twitch, WhatsApp
+- [ ] Recipes v2: LinkedIn, Facebook, Instagram, Gmail, news sticky bars (needs logged-in verification)
+- [x] Remember focus per site ("Focus here every visit")
+- [x] Self-healing rules plus "Not found · Fix it"
+- [x] Toolbar badge with the hidden count; right-click Hide/Focus
+- [x] Hide similar; blur mode
+- [x] Redact mode: click or drag to cover, auto-detect sensitive info, one-click screenshot (from samepad idea 2026-10-01)
+- [ ] Redact v2: remember auto-redact per site, custom words, region and full-page screenshots
 - [ ] Share a cleanup by link (P1)
 - [ ] Uninstall feedback URL; what's-new note (P1)
 - [ ] Open-source the repo (P1)
@@ -93,6 +98,8 @@ Content and SEO (one page per week on eligapris.com/quietview/…)
 - [ ] How to hide your WhatsApp Web chat list while screen-sharing
 - [ ] How to remove sticky headers and cookie bars on news sites
 - [ ] How to focus on one Google Doc / dashboard panel
+- [ ] How to blur sensitive info before a screenshot or screen recording (Redact)
+- [ ] How to hide API keys and emails in tutorial videos
 - [ ] Each page gets a GIF, the manual method, "1 click with QuietView", and a recipe link
 
 Video
@@ -113,10 +120,21 @@ Trust and reach
 |---|---|---|
 | 2026-06-03 | 1.0.0 | Picker, selector and snippet rules, per-site persistence, export/import |
 | 2026-06-03 | 1.0.1 | Eligapris branding, privacy URL, Firefox ID |
-| 2026-10-01 | 1.1.0 | **Focus mode**, resizable picker, Undo, popup redesign, merge import, store-keyword listing (built, not yet published) |
+| 2026-10-01 | 1.2.0 | **Focus mode**, resizable picker, Undo, popup redesign, merge import, store-keyword listing, **self-repairing rules**, **one-click cleanups**, **focus every visit**, right-click actions, hide similar, blur, badge, welcome demo, **Redact mode with screenshots** (built and tested, not yet uploaded) |
+
+## Next up (product)
+
+1. Recipes v2 (LinkedIn, Facebook, Instagram, Gmail), verified on logged-in accounts
+1. Redact v2: per-site auto-redact, custom words, region/full-page screenshots. Pitch Redact to blogger and tutorial communities (r/screenrecording, r/youtubers, dev-tutorial creators)
+2. Share a cleanup by link (growth loop and SEO pages)
+3. Pause QuietView on a site for 15 minutes; optional `storage.sync`
+4. Uninstall feedback URL plus a what's-new note after updates
+5. Focus "dim" variant (page visible but darkened) and Document Picture-in-Picture pop-out
 
 ## Decisions
 
 - **2026-10-01:** Positioned QuietView as "hide distractions and focus anything" rather than another element hider. Reason: the category leader is abandoned and no working generic focus tool exists. See MARKET_RESEARCH.md.
 - **2026-10-01:** Moved the shortcuts to Alt+Shift+H (hide) and Alt+Shift+F (focus), because Type For Me (also Eligapris) uses Ctrl+Shift+Y. Existing installs keep their current binding.
 - **2026-10-01:** Usage counters for the rating prompt stay local and are never sent anywhere. The privacy policy has been updated to say so.
+- **2026-10-01:** Self-repair only applies a match when the score is ≥ 6 and at least 2 ahead of the runner-up. A wrong guess would hide content the user wants, which is worse than showing "Not found · Fix it".
+- **2026-10-01:** Focus fullscreens the page, not the element. Fullscreening the element let it cover QuietView's own exit control in the browser's top layer.

@@ -40,6 +40,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: var(--qv-font);
@@ -600,4 +604,67 @@ textarea {
 .footer a:hover {
   color: var(--qv-accent);
   text-decoration: underline;
+}
+
+/* Notices, recipe panel, rule states */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  background: var(--qv-focus-soft);
+  border: 1px solid color-mix(in srgb, var(--qv-focus) 35%, transparent);
+  border-radius: var(--qv-radius);
+  padding: 8px 12px;
+  line-height: 1.4;
+}
+
+.notice strong {
+  font-weight: 600;
+}
+
+.panel-sub {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--qv-muted);
+}
+
+.rule-state.warn {
+  color: var(--qv-error);
+}
+
+.rule-state .link-btn {
+  font-size: 11px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--qv-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.action-redact {
+  background: var(--qv-panel);
+  color: var(--qv-text);
+  border-color: var(--qv-border);
+}
+
+.action-redact:hover:not(:disabled) {
+  border-color: #f59e0b;
+}
+
+.action-redact .action-icon {
+  stroke: #d97706;
+  color: #d97706;
+}
+
+.action-redact .action-kbd {
+  background: var(--qv-bg);
+}
+
+.notice-redact {
+  background: color-mix(in srgb, #f59e0b 12%, var(--qv-panel));
+  border-color: color-mix(in srgb, #f59e0b 45%, transparent);
 }

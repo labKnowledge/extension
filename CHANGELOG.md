@@ -2,9 +2,22 @@
 
 All notable changes to QuietView are documented in this file.
 
-## [1.1.0] - 2026-10-01
+## [1.2.0] - 2026-10-01
+
+Includes the unreleased 1.1.0 work.
 
 ### Added
+
+- **Redact mode** for bloggers, tutors and screen recorders: click any element or drag a box to blur or black it out. **Auto-detect** covers emails, phone numbers, card numbers (Luhn-checked), API keys and tokens (Stripe, OpenAI, GitHub, Slack, AWS, Google, JWTs), IP addresses and password fields. It uses the CSS Highlight API, so page text is never modified. **Screenshot** captures the tab with redactions applied and QuietView's own UI hidden, saves a PNG and copies it to the clipboard. Keys: A auto-detect, B blur/black, Z undo, S screenshot, Esc done. Shortcut Alt+Shift+R; also on the right-click menu ("Redact this element")
+- **Self-repairing rules:** each rule stores a fingerprint of what it hid. When a site change breaks the selector, QuietView finds the same element again and updates the rule. It only does this on a clear, unambiguous match. The popup shows "repaired automatically after a site change"
+- **"Not found on this page · Fix it":** rules that match nothing are flagged in the popup. "Fix it" re-picks the element and updates the existing rule
+- **One-click cleanups** for YouTube (Shorts, recommendations next to videos, home feed, comments, end-of-video suggestions), Reddit, X, Twitch, and WhatsApp Web (including "blur chat list")
+- **Focus here every visit:** a toggle in Focus mode that re-focuses that element automatically whenever you open the site. Stop it from the popup
+- **Right-click menu:** "Hide this element" and "Focus on this element" act on exactly what you clicked
+- **"Hide all N like this"** offered after a hide when similar elements exist (e.g. every card in a feed)
+- **Blur mode:** a third hide style that blurs the element and shows it when you hover, for privacy and screen-sharing
+- **Toolbar badge** showing how many elements are hidden on the current tab
+- **Welcome page** on install with a hands-on demo of Hide and Focus
 
 - **Focus mode:** pick any element and make it fill the screen. Native fullscreen when allowed, in-tab fill otherwise. Media is letterboxed in black. Exit with Esc or the floating "Exit focus" button. Shortcut: Alt+Shift+F
 - Picker: ↑ / ↓ to select the parent or child, Enter to confirm, a hint bar showing the element's name and size
@@ -27,6 +40,12 @@ All notable changes to QuietView are documented in this file.
 - The default WhatsApp Web rule came back every time the popup opened after you deleted it
 - Firefox: the background script failed because `importScripts` is unavailable there
 - Keyboard shortcut did nothing on tabs opened before install or update (now injects and retries)
+
+### Under the hood
+
+- New hide engine (`utils/hider.js`): rules tag elements with attributes and one stylesheet acts on them. The page's inline styles are never touched, so pausing and removing restore pages exactly
+- Focus mode fullscreens the page instead of the element, so QuietView's exit control and toasts stay visible and clickable
+- Landmark tags (`main`, `video`, `article`…) and aria-labels are preferred as selectors because they survive redesigns
 
 ## [1.0.1] - 2026-06-03
 

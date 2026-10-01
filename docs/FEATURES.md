@@ -19,11 +19,27 @@ Every feature we've identified, grouped by theme and ranked. Status lives in [`.
 | Neutralize transformed or filtered ancestors | ✅ v1.1 | Fixes the main reason "fullscreen anything" tools fail. |
 | End focus cleanly if the site removes the element (SPA) | ✅ v1.1 | |
 | Shortcut: Alt+Shift+F | ✅ v1.1 | |
-| **Remember focus per site** ("always open WhatsApp focused on the chat") | P0 | Nobody does this. Uses in-tab fill on load, since fullscreen needs a click. One switch: "Focus this every time". |
-| Smart target: on hover, prefer the meaningful container (video, main, article, chat pane, canvas) | P1 | Uses size and semantics. Reduces how often users need ↑. |
+| **Remember focus per site** ("always open WhatsApp focused on the chat") | ✅ v1.2 | Nobody does this. Uses in-tab fill on load, since fullscreen needs a click. One switch: "Focus this every time". |
+| Smart target: on hover, prefer the meaningful container (media, or anything covering ≥15% of the viewport) | ✅ v1.1 | Uses size and semantics. Reduces how often users need ↑. |
 | Dim instead of remove (spotlight with 85% dark backdrop, page still visible) | P1 | One key cycles fill → dim. No settings page. |
 | Pop out to an always-on-top window (Document Picture-in-Picture) | P2 | Chrome 116+. For chats, timers and dashboards. |
 | Focus queue: Tab moves focus to the next sibling (e.g. next post or video) | P2 | |
+
+## 1b. Redact (for bloggers, tutors and screen recorders)
+
+| Feature | Priority | Notes |
+|---|---|---|
+| Click to redact an element; drag to cover any area | ✅ v1.2 | Click again to un-redact; Z undoes. |
+| Blur or Black, switchable live (B) | ✅ v1.2 | Black = solid box; blur strong enough to make text unreadable. |
+| Auto-detect: emails, phones, cards (Luhn), API keys and tokens, JWTs, IPs, password fields | ✅ v1.2 | CSS Highlight API, so no page text is modified. Re-scans as the page changes. Over-covers on purpose. |
+| Screenshot: QuietView UI hidden, PNG saved and copied | ✅ v1.2 | Refuses to capture a tab other than the requesting one. |
+| Right-click "Redact this element", Alt+Shift+R, popup "N items redacted · Screenshot · Clear" | ✅ v1.2 | |
+| Full-page (scrolling) screenshot | P1 | Stitch captures while scrolling; careful with sticky headers. |
+| Screenshot of a selected region only | P1 | Drag an area, crop the capture. |
+| Annotate before saving (arrow, box, text) | P2 | Lightweight canvas editor; only if users ask. |
+| Remember auto-redact per site ("always redact on this dashboard") | P1 | Useful for tutors who record the same admin panel repeatedly. |
+| Custom words to always redact (your name, company, project codes) | P1 | One text field; matched like the built-in detectors. |
+| Redact inside iframes (embedded dashboards) | P2 | Needs all_frames content scripts. |
 
 ## 2. Hiding
 
@@ -39,20 +55,21 @@ Every feature we've identified, grouped by theme and ranked. Status lives in [`.
 | Remove vs. keep the space, remembered as a preference | ✅ v1.1 | Under More options. |
 | CSS selector and HTML snippet rules | ✅ v1.0 | Moved under More options in v1.1. |
 | Floating show/hide-all toggle on pages with rules | ✅ v1.0 | |
-| **Self-healing rules**: store several fingerprints (attributes, ARIA, text anchor, path, size) and fall back through them | P0 | Fixes the top category complaint. |
-| **"Needs re-pick" badge** when a rule matches nothing for N visits | P0 | Shows the failure instead of failing silently. |
-| **Hide similar**: one click hides every matching card (e.g. all Shorts shelves) | P1 | Toast offers "Hide all 12 like this". |
-| Blur instead of hide (for privacy and screen-sharing) | P1 | Big demand, given the 1.2M-user WhatsApp privacy extension. |
+| **Self-healing rules**: fingerprint (id, test id, ARIA, classes, parent classes, text) scored against the page; only clear winners are used | ✅ v1.2 | Fixes the top category complaint. |
+| **"Not found on this page · Fix it"** in the popup, with re-pick that updates the same rule | ✅ v1.2 | Shows the failure instead of failing silently. |
+| **Hide similar**: toast offers "Hide all N like this" | ✅ v1.2 | Toast offers "Hide all 12 like this". |
+| Blur instead of hide, hover to peek (for privacy and screen-sharing) | ✅ v1.2 | Big demand, given the 1.2M-user WhatsApp privacy extension. |
 | Text rules: "hide blocks containing 'Sponsored'" | P1 | Plain words, no regex. |
 | "What's hidden here" overlay: outlines everything hidden, click to restore | P1 | Addresses "this page looks broken". |
-| Right-click → "Hide this" / "Focus this" | P1 | Context menu that skips the picker entirely. |
+| Right-click → "Hide this element" / "Focus on this element" | ✅ v1.2 | Context menu that skips the picker entirely. |
 | Element picking inside iframes | P2 | |
 
 ## 3. Recipes (one-click outcomes for popular sites)
 
 | Feature | Priority | Notes |
 |---|---|---|
-| **Recipe pack v1**: YouTube (Shorts, recommendations, comments), X (trends, who to follow), LinkedIn (feed), Reddit (sidebar), Facebook (Reels), Instagram (Reels tab), WhatsApp (chat list), Gmail (promos tab), sticky news headers | P0 | Popup shows "Suggested for youtube.com" when a recipe exists. |
+| **Recipe pack v1**: YouTube (Shorts, related, home feed, comments, end screens), Reddit (sidebars), X (sidebar), Twitch (side nav), WhatsApp (blur or hide chat list) | ✅ v1.2 |
+| Recipe pack v2: LinkedIn feed, Facebook Reels, Instagram Reels, Gmail promos, news sticky headers. These need logged-in verification first | P1 | Popup shows "Suggested for youtube.com" when a recipe exists. |
 | Recipes shipped as data and updatable without a store review | P1 | Signed JSON. Fall back to the bundled copy. |
 | Share a cleanup by link (export a site's rules as a short importable URL) | P1 | Growth loop plus SEO pages. |
 | Detox bundle: one click applies all feed killers | P1 | |
@@ -68,7 +85,7 @@ Every feature we've identified, grouped by theme and ranked. Status lives in [`.
 | Pause QuietView on this site for 15 minutes | P1 | One click. Restores itself automatically. |
 | Schedules: "Hide feeds 9–5 on weekdays" | P2 | One preset per site, not a cron editor. |
 | Named modes (Work, Study, Off) | P2 | Only if schedules prove insufficient. |
-| Toolbar badge with the number hidden on the current site | P1 | Shows the value at a glance and nudges the user to open the popup. |
+| Toolbar badge with the number hidden on the current tab | ✅ v1.2 | Shows the value at a glance and nudges the user to open the popup. |
 
 ## 5. Trust and portability
 
@@ -90,7 +107,7 @@ Every feature we've identified, grouped by theme and ranked. Status lives in [`.
 |---|---|---|
 | One-time rating prompt after 3 successful hides or focuses | ✅ v1.1 | Local counters only, never shown again once answered. |
 | "Rate" link in the popup footer | ✅ v1.1 | Goes to the CWS or AMO review page automatically. |
-| Welcome page on first install: a 20-second interactive demo page (hide this, focus this) | P0 | Gets new users to the first success fast. That drives retention and reviews. |
+| Welcome page on first install: a 20-second interactive demo that runs the real picker | ✅ v1.2 | Gets new users to the first success fast. That drives retention and reviews. |
 | Uninstall feedback URL (one question, no tracking) | P1 | `chrome.runtime.setUninstallURL` → eligapris.com/quietview/bye |
 | "Share this cleanup" button | P1 | See Recipes. |
 | What's-new note after updates (popup, dismissible once) | P1 | Keeps users aware of new features like Focus. |

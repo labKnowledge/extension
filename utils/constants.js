@@ -2,14 +2,23 @@
   const QUIETVIEW = {
     name: "QuietView",
     tagline: "Hide what distracts you. Focus on what matters.",
-    version: "1.1.0",
+    version: "1.2.0",
     exportPrefix: "quietview-rules",
     exportFormatVersion: 2,
     prefsKey: "quietViewPrefs",
     seedKey: "quietViewSeeded",
     statsKey: "quietViewStats",
+    focusKey: "quietViewFocus",
     firefoxId: "quietview@eligapris.com",
-    contentScripts: ["utils/constants.js", "utils/selector.js", "utils/focus.js", "content.js"],
+    contentScripts: [
+      "utils/constants.js",
+      "utils/selector.js",
+      "utils/hider.js",
+      "utils/focus.js",
+      "utils/recipes.js",
+      "utils/redact.js",
+      "content.js"
+    ],
     storageKey: "quietViewRules",
     legacyStorageKey: "areaHiderRules",
     publisher: {

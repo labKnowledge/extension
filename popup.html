@@ -42,7 +42,27 @@
           </span>
           <kbd id="focusShortcut" class="action-kbd"></kbd>
         </button>
+        <button id="redactBtn" class="action action-redact" type="button">
+          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <rect x="6" y="9" width="7" height="3" rx="0.5" fill="currentColor" />
+            <line x1="6" y1="15" x2="17" y2="15" />
+          </svg>
+          <span class="action-text">
+            <span class="action-title">Redact sensitive info</span>
+            <span class="action-desc">Blur or black out anything, then take a screenshot.</span>
+          </span>
+          <kbd id="redactShortcut" class="action-kbd"></kbd>
+        </button>
       </section>
+
+      <div id="redactRow" class="notice notice-redact" hidden>
+        <span id="redactLabel"></span>
+        <span class="row">
+          <button id="redactShot" class="link-btn" type="button">Screenshot</button>
+          <button id="redactClear" class="link-btn" type="button">Clear</button>
+        </span>
+      </div>
 
       <div id="reviewPrompt" class="review" hidden>
         <p>Is QuietView helping you focus? A quick rating helps other people find it.</p>
@@ -51,6 +71,19 @@
           <button id="reviewDismiss" class="btn-ghost btn-small" type="button">Not now</button>
         </div>
       </div>
+
+      <div id="autoFocusRow" class="notice" hidden>
+        <span>Focuses <strong id="autoFocusLabel"></strong> on every visit.</span>
+        <button id="autoFocusStop" class="link-btn" type="button">Stop</button>
+      </div>
+
+      <section id="recipesPanel" class="panel" aria-labelledby="recipesHeading" hidden>
+        <div class="panel-head">
+          <h2 id="recipesHeading">One-click cleanups</h2>
+          <span id="recipesSite" class="panel-sub"></span>
+        </div>
+        <ul id="recipesList" class="rules"></ul>
+      </section>
 
       <section class="panel" aria-labelledby="hiddenHeading">
         <div class="panel-head">
@@ -78,6 +111,10 @@
               <input type="radio" name="hideMode" value="visibilityHidden" />
               <span>Leave an empty space (layout stays the same)</span>
             </label>
+            <label class="radio">
+              <input type="radio" name="hideMode" value="blur" />
+              <span>Blur it, and show it when you hover (good for screen-sharing)</span>
+            </label>
           </fieldset>
 
           <form id="selectorForm" class="option">
@@ -103,6 +140,7 @@
             </div>
           </div>
 
+          <p class="hint">Tip: right-click anything on a page to hide, focus, or redact exactly that element.</p>
           <button id="shortcutsBtn" class="link-btn" type="button">Change keyboard shortcuts</button>
         </div>
       </details>
@@ -118,6 +156,7 @@
       </footer>
     </main>
     <script src="utils/constants.js"></script>
+    <script src="utils/recipes.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

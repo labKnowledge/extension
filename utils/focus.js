@@ -1,8 +1,10 @@
 // Focus mode: make one element fill the screen.
 //
-// Strategy: the element is first expanded to fill the tab (works everywhere,
-// no flash), then native fullscreen is requested on top of that. If the page
-// or browser refuses fullscreen, the in-tab fill stays as the fallback.
+// Strategy: the element is expanded to fill the tab (works everywhere, no
+// flash), then the *page* is put into native fullscreen. Fullscreening the
+// page rather than the element keeps QuietView's own controls (exit button,
+// toasts) inside the fullscreen layer. If fullscreen is refused, the in-tab
+// fill stays as the fallback.
 // Everything is reversible: we only add attributes and one stylesheet.
 (function initQuietViewFocus(global) {
   const TARGET_ATTR = "data-quietview-focus";
@@ -64,7 +66,6 @@
         box-sizing: border-box !important;
         background-color: ${background} !important;
       }
-      [${TARGET_ATTR}]::backdrop { background-color: ${background} !important; }
     `;
   }
 
@@ -87,15 +88,13 @@
     return marked;
   }
 
-  // The exit control lives in the top layer (popover) so it stays visible
-  // above a natively fullscreened element, and in a shadow root so page CSS
-  // cannot restyle it.
-  function createExitControl(onExit) {
+  // The exit control sits at the root stacking level above the focused
+  // element, in a shadow root so page CSS cannot restyle it.
+  function createExitControl(onExit, pin) {
     const host = document.createElement("div");
     host.id = EXIT_HOST_ID;
-    host.setAttribute("popover", "manual");
     host.style.cssText =
-      "position:fixed;inset:16px 16px auto auto;margin:0;padding:0;border:0;background:transparent;overflow:visible;";
+      "position:fixed;inset:16px 16px auto auto;margin:0;padding:0;border:0;background:transparent;z-index:2147483647;";
     const shadow = host.attachShadow({ mode: "closed" });
     shadow.innerHTML = `
       <style>
@@ -109,32 +108,42 @@
         button:hover, button:focus-visible { opacity: 1; }
         button:focus-visible { outline: 2px solid #5fd3d3; outline-offset: 2px; }
         kbd { font: inherit; padding: 1px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); }
+        .bar { display: flex; gap: 8px; }
+        .pin[aria-pressed="true"] { background: rgba(124, 92, 255, 0.92); }
       </style>
-      <button type="button" aria-label="Exit focus mode">Exit focus <kbd>Esc</kbd></button>
+      <div class="bar">
+        <button class="pin" type="button" hidden></button>
+        <button class="exit" type="button" aria-label="Exit focus mode">Exit focus <kbd>Esc</kbd></button>
+      </div>
     `;
-    const button = shadow.querySelector("button");
-    button.addEventListener("click", (event) => {
+    const exitButton = shadow.querySelector(".exit");
+    exitButton.addEventListener("click", (event) => {
       event.stopPropagation();
       onExit();
     });
-    window.setTimeout(() => button.classList.add("idle"), 2500);
+
+    // Optional "remember this" toggle: focus this element on every visit.
+    const pinButton = shadow.querySelector(".pin");
+    if (pin) {
+      let pinned = Boolean(pin.pinned);
+      const render = () => {
+        pinButton.textContent = pinned ? "✓ Focusing here every visit" : "Focus here every visit";
+        pinButton.setAttribute("aria-pressed", String(pinned));
+      };
+      render();
+      pinButton.hidden = false;
+      pinButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        pinned = !pinned;
+        render();
+        pin.onToggle(pinned);
+      });
+    }
+
+    const buttons = shadow.querySelectorAll("button");
+    window.setTimeout(() => buttons.forEach((b) => b.classList.add("idle")), 3500);
     document.documentElement.appendChild(host);
     return host;
-  }
-
-  function showExitControl() {
-    if (!state || !state.exitHost) {
-      return;
-    }
-    try {
-      // Re-showing moves it to the top of the top layer, above fullscreen.
-      if (state.exitHost.matches(":popover-open")) {
-        state.exitHost.hidePopover();
-      }
-      state.exitHost.showPopover();
-    } catch (_err) {
-      state.exitHost.style.zIndex = "2147483647";
-    }
   }
 
   function exit() {
@@ -147,7 +156,7 @@
     document.removeEventListener("keydown", current.onKeyDown, true);
     document.removeEventListener("fullscreenchange", current.onFullscreenChange, true);
 
-    if (document.fullscreenElement === current.target) {
+    if (document.fullscreenElement === document.documentElement) {
       document.exitFullscreen().catch(() => {});
     }
     current.target.removeAttribute(TARGET_ATTR);
@@ -167,6 +176,7 @@
   /**
    * Make `target` fill the screen. Must be called from a user gesture
    * (e.g. the picker click) for native fullscreen to be granted.
+   * Options: fullscreen (default true), onExit(), pin { pinned, onToggle }.
    * Returns a promise resolving to "fullscreen" or "tab".
    */
   function enter(target, options = {}) {
@@ -189,7 +199,7 @@
       scrollX,
       scrollY,
       marked: markPath(target),
-      exitHost: createExitControl(exit),
+      exitHost: createExitControl(exit, options.pin),
       onExit: options.onExit,
       onKeyDown: (event) => {
         if (event.key === "Escape") {
@@ -202,9 +212,7 @@
         if (!state) {
           return;
         }
-        if (document.fullscreenElement === state.target) {
-          showExitControl();
-        } else if (state.wasFullscreen) {
+        if (!document.fullscreenElement && state.wasFullscreen) {
           // User left native fullscreen (Esc / F11): leave focus entirely.
           exit();
         }
@@ -214,15 +222,15 @@
     document.documentElement.setAttribute(ROOT_ATTR, "");
     target.setAttribute(TARGET_ATTR, "");
     target.scrollTop = 0;
-    showExitControl();
     document.addEventListener("keydown", state.onKeyDown, true);
     document.addEventListener("fullscreenchange", state.onFullscreenChange, true);
 
-    if (options.fullscreen === false || typeof target.requestFullscreen !== "function") {
+    const root = document.documentElement;
+    if (options.fullscreen === false || typeof root.requestFullscreen !== "function" || document.fullscreenElement) {
       return Promise.resolve("tab");
     }
     const session = state;
-    return target
+    return root
       .requestFullscreen({ navigationUI: "hide" })
       .then(() => {
         session.wasFullscreen = true;
@@ -244,6 +252,7 @@
     enter,
     exit,
     checkConnected,
-    isActive: () => Boolean(state)
+    isActive: () => Boolean(state),
+    currentTarget: () => (state ? state.target : null)
   };
 })(typeof globalThis !== "undefined" ? globalThis : window);

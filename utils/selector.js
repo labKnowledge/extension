@@ -124,6 +124,99 @@
     return text ? `“${text}”` : `${tag} element`;
   }
 
+  // ---------------------------------------------------------------------
+  // Fingerprints: a rule remembers *what* it hid, not just *where*, so it
+  // can find the element again after the site changes its markup.
+  // ---------------------------------------------------------------------
+
+  function textAnchor(element) {
+    return String(element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  }
+
+  function fingerprint(element) {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+      return null;
+    }
+    return {
+      tag: element.tagName.toLowerCase(),
+      id: element.id || "",
+      testId: element.getAttribute("data-testid") || "",
+      ariaLabel: element.getAttribute("aria-label") || "",
+      role: element.getAttribute("role") || "",
+      classes: Array.from(element.classList || []).filter(isLikelyStableClass).slice(0, 8),
+      // Context for plain elements (a <p> or <div> with no attributes).
+      parentClasses: Array.from(element.parentElement?.classList || []).filter(isLikelyStableClass).slice(0, 6),
+      text: textAnchor(element)
+    };
+  }
+
+  function scoreFingerprint(element, fp) {
+    let score = 0;
+    if (fp.id && element.id === fp.id) score += 5;
+    if (fp.testId && element.getAttribute("data-testid") === fp.testId) score += 5;
+    if (fp.ariaLabel && element.getAttribute("aria-label") === fp.ariaLabel) score += 4;
+    if (fp.role && element.getAttribute("role") === fp.role) score += 1;
+    if (fp.text && fp.text.length >= 8 && textAnchor(element) === fp.text) {
+      score += fp.text.length >= 20 ? 4 : 3;
+    }
+    const overlap = (wanted, list) =>
+      wanted && wanted.length ? wanted.filter((name) => list.contains(name)).length / wanted.length : 0;
+    score += Math.round(overlap(fp.classes, element.classList) * 4);
+    if (element.parentElement) {
+      score += Math.round(overlap(fp.parentClasses, element.parentElement.classList) * 2);
+    }
+    return score;
+  }
+
+  const HEAL_MIN_SCORE = 6;
+  const HEAL_MIN_MARGIN = 2;
+  const HEAL_MAX_CANDIDATES = 4000;
+
+  // Returns the single element that clearly matches the fingerprint, or null
+  // when the evidence is weak or ambiguous (never guess: a wrong guess would
+  // hide something the user wants to see).
+  function findByFingerprint(fp, root) {
+    if (!fp || !fp.tag) {
+      return null;
+    }
+    const scope = root || document;
+    const candidates = scope.getElementsByTagName(fp.tag);
+    if (!candidates.length || candidates.length > HEAL_MAX_CANDIDATES) {
+      return null;
+    }
+    let best = null;
+    let bestScore = 0;
+    let runnerUp = 0;
+    for (const candidate of candidates) {
+      const score = scoreFingerprint(candidate, fp);
+      if (score > bestScore) {
+        runnerUp = bestScore;
+        bestScore = score;
+        best = candidate;
+      } else if (score > runnerUp) {
+        runnerUp = score;
+      }
+    }
+    if (bestScore >= HEAL_MIN_SCORE && bestScore - runnerUp >= HEAL_MIN_MARGIN) {
+      return best;
+    }
+    return null;
+  }
+
+  // Selector for "everything like this one": same tag and stable classes.
+  // Only offered when it matches a sensible handful of siblings-in-kind.
+  function buildSimilarSelector(element) {
+    const selector = buildClassSelector(element, 3);
+    if (!selector) {
+      return null;
+    }
+    const count = countMatches(selector);
+    if (count < 2 || count > 300) {
+      return null;
+    }
+    return { selector, count };
+  }
+
   function enumerateSelectorCandidates(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) {
       return [];
@@ -138,6 +231,12 @@
     const testId = element.getAttribute("data-testid");
     if (testId) {
       candidates.push(`[data-testid="${cssEscape(testId)}"]`);
+    }
+
+    // Landmark and media tags are usually unique and survive layout changes.
+    const tagName = element.tagName.toLowerCase();
+    if (/^(main|header|footer|nav|aside|article|video|canvas)$/.test(tagName)) {
+      candidates.push(tagName);
     }
 
     // Accessible names are tied to meaning, so they survive redesigns better
@@ -255,6 +354,9 @@
     buildFullClassSelector,
     buildPathSelector,
     buildStrictPathSelector,
-    describeElement
+    describeElement,
+    fingerprint,
+    findByFingerprint,
+    buildSimilarSelector
   };
 })(window);

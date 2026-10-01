@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to QuietView</title>
+    <link rel="stylesheet" href="welcome.css" />
+  </head>
+  <body>
+    <header class="top">
+      <img src="icons/icon-48.png" width="40" height="40" alt="" />
+      <div>
+        <h1>QuietView is ready</h1>
+        <p>Try both actions below. It takes about 20 seconds.</p>
+      </div>
+    </header>
+
+    <main class="layout">
+      <ol class="steps">
+        <li class="step" data-step="hide">
+          <span class="num">1</span>
+          <div>
+            <h2>Hide something</h2>
+            <p>Press the button, then click the orange banner in the demo.</p>
+            <button id="tryHide" class="btn btn-hide" type="button">Try Hide</button>
+            <p class="done" hidden>✓ Gone. On a real site it stays hidden every time you come back.</p>
+          </div>
+        </li>
+        <li class="step" data-step="focus">
+          <span class="num">2</span>
+          <div>
+            <h2>Focus on something</h2>
+            <p>Press the button, then click the video. Press <kbd>Esc</kbd> to come back.</p>
+            <button id="tryFocus" class="btn btn-focus" type="button">Try Focus</button>
+            <p class="done" hidden>✓ That works on any video, chat, article, or chart.</p>
+          </div>
+        </li>
+        <li class="step">
+          <span class="num">3</span>
+          <div>
+            <h2>Keep it handy</h2>
+            <p>
+              Click the puzzle icon in your toolbar and pin <strong>QuietView</strong>. Or skip the toolbar:
+              <kbd id="hideKey">Alt+Shift+H</kbd> hides, <kbd id="focusKey">Alt+Shift+F</kbd> focuses, and you can
+              right-click anything on a page.
+            </p>
+          </div>
+        </li>
+      </ol>
+
+      <section class="demo" aria-label="Demo page">
+        <div class="demo-promo" aria-label="Promo banner">🔥 Limited offer: upgrade now and save 50%!</div>
+        <div class="demo-body">
+          <article>
+            <div class="demo-video" aria-label="Demo video"><span class="play" aria-hidden="true"></span></div>
+            <h3>How to do deep work in a noisy world</h3>
+            <p>Distractions add up. A quieter screen makes it easier to stay on the one thing that matters.</p>
+          </article>
+          <aside class="demo-trending" aria-label="Trending sidebar">
+            <h4>Trending now</h4>
+            <p>You won't believe #7</p>
+            <p>Everyone is watching this</p>
+            <p>Top 50 moments</p>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <a href="https://eligapris.com/quietview" target="_blank" rel="noopener noreferrer">eligapris.com/quietview</a>
+      · Nothing you hide ever leaves your browser.
+    </footer>
+
+    <script src="utils/constants.js"></script>
+    <script src="utils/selector.js"></script>
+    <script src="utils/hider.js"></script>
+    <script src="utils/focus.js"></script>
+    <script src="utils/recipes.js"></script>
+    <script src="utils/redact.js"></script>
+    <script src="content.js"></script>
+    <script src="welcome.js"></script>
+  </body>
+</html>

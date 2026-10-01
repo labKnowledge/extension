@@ -4,6 +4,12 @@ const ui = {
   siteLabel: $("siteLabel"),
   hideBtn: $("hideBtn"),
   focusBtn: $("focusBtn"),
+  redactBtn: $("redactBtn"),
+  redactShortcut: $("redactShortcut"),
+  redactRow: $("redactRow"),
+  redactLabel: $("redactLabel"),
+  redactShot: $("redactShot"),
+  redactClear: $("redactClear"),
   hideShortcut: $("hideShortcut"),
   focusShortcut: $("focusShortcut"),
   siteRules: $("siteRules"),
@@ -22,6 +28,12 @@ const ui = {
   reviewPrompt: $("reviewPrompt"),
   reviewLink: $("reviewLink"),
   reviewDismiss: $("reviewDismiss"),
+  autoFocusRow: $("autoFocusRow"),
+  autoFocusLabel: $("autoFocusLabel"),
+  autoFocusStop: $("autoFocusStop"),
+  recipesPanel: $("recipesPanel"),
+  recipesSite: $("recipesSite"),
+  recipesList: $("recipesList"),
   status: $("status")
 };
 
@@ -33,6 +45,9 @@ const DEFAULT_WHATSAPP_SELECTOR =
 let activeTabId = null;
 let currentOrigin = "";
 let allRulesMap = {};
+// Live state from the page: matches per rule (null when the page can't say).
+let pageState = null;
+const REPAIRED_NOTICE_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Messaging
@@ -154,7 +169,7 @@ function buildRuleRow(rule, origin) {
   name.title = rule.selector;
   const state = document.createElement("span");
   state.className = "rule-state";
-  state.textContent = rule.enabled ? "Hidden" : "Showing";
+  renderRuleState(state, rule, origin);
   text.append(name, state);
 
   const toggle = buildSwitch(rule.enabled, `Keep “${ruleLabel(rule)}” hidden`, async (enabled) => {
@@ -178,8 +193,93 @@ function buildRuleRow(rule, origin) {
   return row;
 }
 
-function renderSiteRules() {
+// Say what is actually happening on the page, and offer the fix inline when
+// a site change broke a rule.
+function renderRuleState(state, rule, origin) {
+  const onThisPage = origin === currentOrigin && pageState;
+  const matches = onThisPage ? pageState.counts[rule.id] : undefined;
+  if (!rule.enabled) {
+    state.textContent = "Showing";
+    return;
+  }
+  if (onThisPage && matches === 0) {
+    state.classList.add("warn");
+    state.textContent = "Not found on this page";
+    if (rule.sourceType !== "recipe") {
+      const fix = document.createElement("button");
+      fix.type = "button";
+      fix.className = "link-btn";
+      fix.textContent = "Fix it";
+      fix.title = "Click the element again to update this rule";
+      fix.addEventListener("click", () => startPicker("hide", { replaceRuleId: rule.id }));
+      state.append(" · ", fix);
+    }
+    return;
+  }
+  state.textContent =
+    rule.healedAt && Date.now() - rule.healedAt < REPAIRED_NOTICE_MS
+      ? "Hidden · repaired automatically after a site change"
+      : "Hidden";
+}
+
+function renderRecipes() {
+  const recipe = currentOrigin ? QuietViewRecipes.recipesForHost(new URL(currentOrigin).hostname) : null;
+  ui.recipesPanel.hidden = !recipe;
+  if (!recipe) {
+    return;
+  }
+  ui.recipesSite.textContent = recipe.site;
+  ui.recipesList.replaceChildren();
   const rules = allRulesMap[currentOrigin] || [];
+
+  for (const item of recipe.items) {
+    const rule = rules.find((entry) => entry.recipeId === item.id);
+    const row = document.createElement("li");
+    row.className = "rule";
+    const text = document.createElement("div");
+    text.className = "rule-text";
+    const name = document.createElement("span");
+    name.className = "rule-name";
+    name.textContent = item.label;
+    const state = document.createElement("span");
+    state.className = "rule-state";
+    if (rule) {
+      renderRuleState(state, rule, currentOrigin);
+    } else {
+      state.textContent = item.hideMode === "blur" ? "Off · blurs until you hover" : "Off";
+    }
+    text.append(name, state);
+
+    const toggle = buildSwitch(Boolean(rule?.enabled), `Turn on “${item.label}”`, async (enabled) => {
+      try {
+        await sendToActiveTab({ type: "SET_RECIPE", recipeId: item.id, enabled });
+        await reloadRules();
+      } catch (error) {
+        reportError(error);
+      }
+    });
+    row.append(text, toggle);
+    ui.recipesList.append(row);
+  }
+}
+
+function renderRedactions() {
+  const count = pageState?.redactions || 0;
+  ui.redactRow.hidden = count === 0;
+  ui.redactLabel.textContent = `${count} item${count === 1 ? "" : "s"} redacted on this page.`;
+}
+
+function renderAutoFocus() {
+  const rule = pageState?.focusRule;
+  ui.autoFocusRow.hidden = !rule;
+  if (rule) {
+    ui.autoFocusLabel.textContent = rule.label || "an element";
+  }
+}
+
+function renderSiteRules() {
+  // Recipe rules are shown (and toggled) in the cleanups panel instead.
+  const rules = (allRulesMap[currentOrigin] || []).filter((rule) => !rule.recipeId);
   ui.siteRules.replaceChildren();
   ui.hiddenCount.hidden = rules.length === 0;
   ui.hiddenCount.textContent = String(rules.length);
@@ -200,7 +300,7 @@ function renderSiteRules() {
 
 function renderOtherSites() {
   const origins = Object.keys(allRulesMap)
-    .filter((origin) => origin !== currentOrigin && allRulesMap[origin]?.length)
+    .filter((origin) => origin !== currentOrigin && /^https?:/.test(origin) && allRulesMap[origin]?.length)
     .sort((a, b) => hostnameOf(a).localeCompare(hostnameOf(b)));
 
   ui.otherSites.hidden = origins.length === 0;
@@ -242,6 +342,12 @@ function renderOtherSites() {
 async function reloadRules() {
   const { ruleMap } = await sendToBackground({ type: "GET_ALL_RULES" });
   allRulesMap = ruleMap || {};
+  if (activeTabId != null) {
+    pageState = await sendToActiveTab({ type: "GET_PAGE_STATE" }).catch(() => null);
+  }
+  renderAutoFocus();
+  renderRedactions();
+  renderRecipes();
   renderSiteRules();
   renderOtherSites();
 }
@@ -280,9 +386,9 @@ async function removeRules(origin, rules) {
   }
 }
 
-async function startPicker(intent) {
+async function startPicker(intent, { replaceRuleId } = {}) {
   try {
-    await sendToActiveTab({ type: "START_PICKER", intent });
+    await sendToActiveTab({ type: "START_PICKER", intent, replaceRuleId });
     window.close();
   } catch (error) {
     reportError(error);
@@ -291,7 +397,8 @@ async function startPicker(intent) {
 
 async function getHideMode() {
   const data = await chrome.storage.local.get(QUIETVIEW.prefsKey);
-  return data[QUIETVIEW.prefsKey]?.hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone";
+  const mode = data[QUIETVIEW.prefsKey]?.hideMode;
+  return mode === "visibilityHidden" || mode === "blur" ? mode : "displayNone";
 }
 
 async function setHideMode(hideMode) {
@@ -360,6 +467,7 @@ async function showShortcuts() {
     const byName = Object.fromEntries(commands.map((command) => [command.name, command.shortcut]));
     ui.hideShortcut.textContent = byName["start-picker"] || "";
     ui.focusShortcut.textContent = byName["focus-element"] || "";
+    ui.redactShortcut.textContent = byName["redact-mode"] || "";
   } catch (_err) {
     // Shortcuts are a hint only.
   }
@@ -370,6 +478,41 @@ async function showShortcuts() {
 // ---------------------------------------------------------------------------
 
 ui.hideBtn.addEventListener("click", () => startPicker("hide"));
+ui.redactBtn.addEventListener("click", async () => {
+  try {
+    await sendToActiveTab({ type: "START_REDACT" });
+    window.close();
+  } catch (error) {
+    reportError(error);
+  }
+});
+ui.redactShot.addEventListener("click", async () => {
+  // The tab capture never includes the popup, so capture, then close.
+  try {
+    await sendToActiveTab({ type: "SCREENSHOT" });
+    window.close();
+  } catch (error) {
+    reportError(error);
+  }
+});
+ui.redactClear.addEventListener("click", async () => {
+  try {
+    await sendToActiveTab({ type: "CLEAR_REDACTIONS" });
+    await reloadRules();
+    setStatus("Redactions cleared.");
+  } catch (error) {
+    reportError(error);
+  }
+});
+ui.autoFocusStop.addEventListener("click", async () => {
+  try {
+    await sendToActiveTab({ type: "CLEAR_FOCUS_RULE" });
+    await reloadRules();
+    setStatus("This site won't auto-focus anymore.");
+  } catch (error) {
+    reportError(error);
+  }
+});
 ui.focusBtn.addEventListener("click", () => startPicker("focus"));
 
 document.querySelectorAll('input[name="hideMode"]').forEach((radio) => {
@@ -507,6 +650,7 @@ ui.shortcutsBtn.addEventListener("click", () => {
     } else {
       ui.hideBtn.disabled = true;
       ui.focusBtn.disabled = true;
+      ui.redactBtn.disabled = true;
       setStatus("QuietView works on regular websites. Open one to start.");
     }
     await reloadRules();

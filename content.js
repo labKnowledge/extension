@@ -1,15 +1,17 @@
-const MARKER_ATTR = "data-quietview-rule-ids";
-const ORIG_DISPLAY_ATTR = "data-quietview-orig-display";
-const ORIG_VISIBILITY_ATTR = "data-quietview-orig-visibility";
-
-const LEGACY_MARKER_ATTR = "data-areahider-rule-ids";
-const LEGACY_ORIG_DISPLAY_ATTR = "data-areahider-orig-display";
-const LEGACY_ORIG_VISIBILITY_ATTR = "data-areahider-orig-visibility";
+// QuietView content script: orchestrates the hide engine (utils/hider.js),
+// Focus mode (utils/focus.js), the shared picker, self-repairing rules,
+// recipes, and the on-page toggle. Storage lives in background.js.
 
 const FLOATING_BTN_ID = "quietview-toggle-btn";
+const LEGACY_MARKERS = {
+  ids: ["data-areahider-rule-ids"],
+  display: ["data-quietview-orig-display", "data-areahider-orig-display"],
+  visibility: ["data-quietview-orig-visibility", "data-areahider-orig-visibility"]
+};
 
 let currentRules = [];
 let currentOrigin = window.location.origin;
+let ruleCounts = {};
 let pickerState = null;
 let observer = null;
 let applyTimer = null;
@@ -18,6 +20,36 @@ let floatingButton = null;
 let toggleDebounce = null;
 let dragState = null;
 let buttonPosition = null;
+let lastContextTarget = null;
+let lastBadgeCount = -1;
+let lastUrl = location.href;
+let pageLoadedAt = Date.now();
+let lastMutationAt = Date.now();
+const healAttempted = new Set();
+const autoFocus = { rule: null, done: false };
+
+// Earlier versions hid elements with inline styles; restore any left over
+// from a previous version of the content script on this page.
+function cleanUpLegacyMarkers() {
+  const restore = (attrs, property) => {
+    for (const attr of attrs) {
+      for (const el of document.querySelectorAll(`[${attr}]`)) {
+        const original = el.getAttribute(attr);
+        if (original) {
+          el.style.setProperty(property, original);
+        } else {
+          el.style.removeProperty(property);
+        }
+        el.removeAttribute(attr);
+      }
+    }
+  };
+  restore(LEGACY_MARKERS.display, "display");
+  restore(LEGACY_MARKERS.visibility, "visibility");
+  for (const attr of LEGACY_MARKERS.ids) {
+    document.querySelectorAll(`[${attr}]`).forEach((el) => el.removeAttribute(attr));
+  }
+}
 
 const BUTTON_POSITION_KEY_PREFIX = "quietview_button_position_";
 
@@ -44,155 +76,10 @@ function loadButtonPosition(callback) {
   }
 }
 
-function updateButtonPosition(right, bottom) {
-  if (!floatingButton) return;
-  const maxRight = window.innerWidth - 48;
-  const maxBottom = window.innerHeight - 48;
-  const clampedRight = Math.max(0, Math.min(right, maxRight));
-  const clampedBottom = Math.max(0, Math.min(bottom, maxBottom));
-  floatingButton.style.right = `${clampedRight}px`;
-  floatingButton.style.bottom = `${clampedBottom}px`;
-}
-
-function migrateLegacyDomMarkers() {
-  const marked = document.querySelectorAll(`[${LEGACY_MARKER_ATTR}]`);
-  for (const el of marked) {
-    if (!el.hasAttribute(MARKER_ATTR)) {
-      el.setAttribute(MARKER_ATTR, el.getAttribute(LEGACY_MARKER_ATTR) || "");
-    }
-    el.removeAttribute(LEGACY_MARKER_ATTR);
-
-    if (el.hasAttribute(LEGACY_ORIG_DISPLAY_ATTR) && !el.hasAttribute(ORIG_DISPLAY_ATTR)) {
-      el.setAttribute(ORIG_DISPLAY_ATTR, el.getAttribute(LEGACY_ORIG_DISPLAY_ATTR) || "");
-    }
-    el.removeAttribute(LEGACY_ORIG_DISPLAY_ATTR);
-
-    if (el.hasAttribute(LEGACY_ORIG_VISIBILITY_ATTR) && !el.hasAttribute(ORIG_VISIBILITY_ATTR)) {
-      el.setAttribute(ORIG_VISIBILITY_ATTR, el.getAttribute(LEGACY_ORIG_VISIBILITY_ATTR) || "");
-    }
-    el.removeAttribute(LEGACY_ORIG_VISIBILITY_ATTR);
-  }
-}
-
-function parseRuleIds(el) {
-  const raw = el.getAttribute(MARKER_ATTR);
-  if (!raw) {
-    return [];
-  }
-  return raw.split(",").map((id) => id.trim()).filter(Boolean);
-}
-
-function setRuleIds(el, ids) {
-  if (!ids.length) {
-    el.removeAttribute(MARKER_ATTR);
-    return;
-  }
-  el.setAttribute(MARKER_ATTR, ids.join(","));
-}
-
-function hideElementForRule(el, rule) {
-  const ids = parseRuleIds(el);
-  if (!ids.includes(rule.id)) {
-    ids.push(rule.id);
-  }
-
-  if (rule.hideMode === "visibilityHidden") {
-    if (!el.hasAttribute(ORIG_VISIBILITY_ATTR)) {
-      el.setAttribute(ORIG_VISIBILITY_ATTR, el.style.visibility || "");
-    }
-    el.style.setProperty("visibility", "hidden", "important");
-  } else {
-    if (!el.hasAttribute(ORIG_DISPLAY_ATTR)) {
-      el.setAttribute(ORIG_DISPLAY_ATTR, el.style.display || "");
-    }
-    el.style.setProperty("display", "none", "important");
-  }
-  setRuleIds(el, ids);
-}
-
-function unhideElementForRule(el, ruleId) {
-  const ids = parseRuleIds(el).filter((id) => id !== ruleId);
-  if (ids.length) {
-    setRuleIds(el, ids);
-    return;
-  }
-
-  setRuleIds(el, []);
-  const originalVisibility = el.getAttribute(ORIG_VISIBILITY_ATTR);
-  el.removeAttribute(ORIG_VISIBILITY_ATTR);
-  if (originalVisibility) {
-    el.style.visibility = originalVisibility;
-  } else {
-    el.style.removeProperty("visibility");
-  }
-
-  const original = el.getAttribute(ORIG_DISPLAY_ATTR);
-  el.removeAttribute(ORIG_DISPLAY_ATTR);
-  if (original) {
-    el.style.display = original;
-  } else {
-    el.style.removeProperty("display");
-  }
-}
-
-function removeRuleFromDom(ruleId) {
-  const marked = document.querySelectorAll(`[${MARKER_ATTR}]`);
-  for (const el of marked) {
-    unhideElementForRule(el, ruleId);
-  }
-}
-
-function applyRule(rule) {
-  let nodes = [];
-  try {
-    nodes = Array.from(document.querySelectorAll(rule.selector));
-  } catch (_err) {
-    return { matched: 0 };
-  }
-
-  for (const node of nodes) {
-    hideElementForRule(node, rule);
-  }
-  return { matched: nodes.length };
-}
-
-function applyAllRules(force = false) {
-  if (!force && !isQuietViewEnabled) {
-    return;
-  }
-  const enabledRules = currentRules.filter((rule) => rule.enabled);
-  for (const rule of enabledRules) {
-    applyRule(rule);
-  }
-}
-
-function showAll() {
-  const marked = document.querySelectorAll(`[${MARKER_ATTR}]`);
-  for (const el of marked) {
-    const originalVisibility = el.getAttribute(ORIG_VISIBILITY_ATTR);
-    if (originalVisibility) {
-      el.style.visibility = originalVisibility;
-    } else {
-      el.style.removeProperty("visibility");
-    }
-
-    const originalDisplay = el.getAttribute(ORIG_DISPLAY_ATTR);
-    if (originalDisplay) {
-      el.style.display = originalDisplay;
-    } else {
-      el.style.removeProperty("display");
-    }
-  }
-}
-
-function hideAll() {
-  applyAllRules(true);
-}
-
-// Single toast surface for every page-side message. An optional action
-// (e.g. Undo) turns it into a one-click recovery path.
+// Single toast surface for every page-side message. Optional actions (Undo,
+// "Hide all like this") turn it into a one-click follow-up.
 function showToast(message, options = {}) {
-  const { isError = false, action = null } = options;
+  const { isError = false, actions = [] } = options;
   document.getElementById("quietview-toast")?.remove();
 
   const toast = document.createElement("div");
@@ -204,10 +91,10 @@ function showToast(message, options = {}) {
     left: "50%",
     transform: "translateX(-50%)",
     zIndex: "2147483647",
-    maxWidth: "min(90vw, 440px)",
+    maxWidth: "min(92vw, 520px)",
     display: "flex",
     alignItems: "center",
-    gap: "12px",
+    gap: "14px",
     padding: "10px 14px",
     borderRadius: "10px",
     font: "13px/1.4 system-ui, -apple-system, sans-serif",
@@ -220,7 +107,7 @@ function showToast(message, options = {}) {
   text.textContent = message;
   toast.appendChild(text);
 
-  if (action) {
+  for (const action of actions) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = action.label;
@@ -228,6 +115,7 @@ function showToast(message, options = {}) {
       all: "unset",
       cursor: "pointer",
       fontWeight: "600",
+      whiteSpace: "nowrap",
       color: QUIETVIEW.colors.accentLight
     });
     button.addEventListener("click", (event) => {
@@ -239,30 +127,23 @@ function showToast(message, options = {}) {
   }
 
   document.documentElement.appendChild(toast);
-  window.setTimeout(() => toast.remove(), isError || action ? 6000 : 3000);
+  window.setTimeout(() => toast.remove(), isError || actions.length ? 7000 : 3000);
 }
 
 function toggleQuietView() {
   if (toggleDebounce) {
     return;
   }
-
   toggleDebounce = true;
   window.setTimeout(() => {
     toggleDebounce = false;
   }, 200);
 
-  if (isQuietViewEnabled) {
-    showAll();
-    isQuietViewEnabled = false;
-    showToast("Showing everything QuietView hid on this site.");
-  } else {
-    hideAll();
-    isQuietViewEnabled = true;
-    showToast("Hidden again.");
-  }
-
+  isQuietViewEnabled = !isQuietViewEnabled;
+  window.QuietViewHider.setPaused(!isQuietViewEnabled);
+  showToast(isQuietViewEnabled ? "Hidden again." : "Showing everything QuietView hid on this site.");
   updateFloatingButton();
+  updateBadge();
 }
 
 function getEyeIcon(isOpen) {
@@ -488,63 +369,43 @@ function showFloatingButtonIfNeeded() {
   });
 }
 
-function scheduleApplyAll() {
-  window.clearTimeout(applyTimer);
-  applyTimer = window.setTimeout(applyAllRules, 120);
-}
 
-function ensureObserver() {
-  if (observer) {
-    return;
-  }
-  observer = new MutationObserver(() => {
-    if (window.QuietViewFocus.isActive() && !window.QuietViewFocus.checkConnected()) {
-      showToast("The page replaced that element, so focus ended.");
-    }
-    scheduleApplyAll();
-  });
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true
-  });
-}
+// ---------------------------------------------------------------------------
+// Storage (through background.js)
+// ---------------------------------------------------------------------------
 
-async function getRulesForOrigin(origin) {
-  const response = await chrome.runtime.sendMessage({ type: "GET_RULES", origin });
+async function ask(message) {
+  const response = await chrome.runtime.sendMessage(message);
   if (!response || !response.ok) {
-    throw new Error(response?.error || "Failed to load rules.");
+    throw new Error(response?.error || "Something went wrong.");
   }
-  return response.rules || [];
+  return response;
 }
 
-async function saveRule(rule) {
-  const response = await chrome.runtime.sendMessage({ type: "UPSERT_RULE", rule });
-  if (!response || !response.ok) {
-    throw new Error(response?.error || "Failed to save rule.");
+const saveRule = async (rule) => (await ask({ type: "UPSERT_RULE", rule })).rules || [];
+const deleteRule = async (origin, id) => (await ask({ type: "DELETE_RULE", origin, id })).rules || [];
+const toggleRule = async (origin, id, enabled) =>
+  (await ask({ type: "TOGGLE_RULE", origin, id, enabled })).rules || [];
+
+async function loadFocusRule() {
+  try {
+    const data = await chrome.storage.local.get(QUIETVIEW.focusKey);
+    return (data[QUIETVIEW.focusKey] || {})[currentOrigin] || null;
+  } catch (_err) {
+    return null;
   }
-  return response.rules || [];
 }
 
-async function deleteRule(origin, id) {
-  const response = await chrome.runtime.sendMessage({ type: "DELETE_RULE", origin, id });
-  if (!response || !response.ok) {
-    throw new Error(response?.error || "Failed to delete rule.");
+async function saveFocusRule(rule) {
+  const data = await chrome.storage.local.get(QUIETVIEW.focusKey);
+  const map = data[QUIETVIEW.focusKey] || {};
+  if (rule) {
+    map[currentOrigin] = rule;
+  } else {
+    delete map[currentOrigin];
   }
-  return response.rules || [];
-}
-
-async function toggleRule(origin, id, enabled) {
-  const response = await chrome.runtime.sendMessage({ type: "TOGGLE_RULE", origin, id, enabled });
-  if (!response || !response.ok) {
-    throw new Error(response?.error || "Failed to toggle rule.");
-  }
-  return response.rules || [];
-}
-
-async function refreshRules() {
-  currentRules = await getRulesForOrigin(currentOrigin);
-  applyAllRules();
-  showFloatingButtonIfNeeded();
+  await chrome.storage.local.set({ [QUIETVIEW.focusKey]: map });
+  autoFocus.rule = rule;
 }
 
 // Local-only usage counters; used solely to time the one-off rating prompt.
@@ -562,10 +423,153 @@ async function bumpStat(key) {
 async function getHideModePreference() {
   try {
     const data = await chrome.storage.local.get(QUIETVIEW.prefsKey);
-    return data[QUIETVIEW.prefsKey]?.hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone";
+    const mode = data[QUIETVIEW.prefsKey]?.hideMode;
+    return mode === "visibilityHidden" || mode === "blur" ? mode : "displayNone";
   } catch (_err) {
     return "displayNone";
   }
+}
+
+// ---------------------------------------------------------------------------
+// Applying rules, self-repair, badge, auto-focus
+// ---------------------------------------------------------------------------
+
+const HEAL_SETTLE_MS = 2500;
+const HEAL_QUIET_MS = 800;
+const AUTO_FOCUS_TIMEOUT_MS = 15000;
+
+function applyAllRules() {
+  ruleCounts = window.QuietViewHider.applyRules(currentRules);
+  updateBadge();
+  maybeAutoFocus();
+  maybeHealRules();
+}
+
+// A rule that stops matching usually means the site changed its markup.
+// Once the page has settled, look for the same element by its fingerprint
+// and quietly repoint the rule. Only clear, unambiguous matches are used.
+let healTimer = null;
+
+// `force` skips the settle wait: used when the popup opens, by which point
+// the page is effectively settled and the user wants an accurate answer.
+async function maybeHealRules({ force = false } = {}) {
+  const now = Date.now();
+  const waitFor = Math.max(HEAL_SETTLE_MS - (now - pageLoadedAt), HEAL_QUIET_MS - (now - lastMutationAt));
+  if (waitFor > 0 && !force) {
+    // Not settled yet: come back once the page has been quiet long enough.
+    const needsHealing = currentRules.some((rule) => rule.enabled && rule.fingerprint && !ruleCounts[rule.id]);
+    if (needsHealing) {
+      window.clearTimeout(healTimer);
+      healTimer = window.setTimeout(scheduleApplyAll, waitFor + 20);
+    }
+    return;
+  }
+  for (const rule of currentRules) {
+    const key = `${rule.id}|${location.pathname}`;
+    if (!rule.enabled || !rule.fingerprint || ruleCounts[rule.id] || healAttempted.has(key)) {
+      continue;
+    }
+    healAttempted.add(key);
+    const found = window.QuietViewSelector.findByFingerprint(rule.fingerprint);
+    if (!found || found.closest("[data-quietview-hide]")) {
+      continue;
+    }
+    const resolved = window.QuietViewSelector.resolveUniqueSelector(found, document.documentElement);
+    if (!resolved.selector || resolved.matchCount !== 1 || resolved.selector === rule.selector) {
+      continue;
+    }
+    try {
+      currentRules = await saveRule({
+        ...rule,
+        selector: resolved.selector,
+        fingerprint: window.QuietViewSelector.fingerprint(found),
+        healedAt: Date.now()
+      });
+      ruleCounts = window.QuietViewHider.applyRules(currentRules);
+      updateBadge();
+    } catch (_err) {
+      // Try again on the next page load.
+    }
+  }
+}
+
+function updateBadge() {
+  const count = isQuietViewEnabled ? window.QuietViewHider.hiddenCount() : 0;
+  if (count === lastBadgeCount || window !== window.top) {
+    return;
+  }
+  lastBadgeCount = count;
+  chrome.runtime.sendMessage({ type: "SET_BADGE", count }).catch(() => {});
+}
+
+function findFocusTarget(rule) {
+  try {
+    const bySelector = document.querySelector(rule.selector);
+    if (bySelector) {
+      return bySelector;
+    }
+  } catch (_err) {
+    // Fall through to the fingerprint.
+  }
+  return window.QuietViewSelector.findByFingerprint(rule.fingerprint);
+}
+
+// "Focus here every visit": wait for the element to appear, then fill the
+// tab with it (native fullscreen needs a click, so this uses the in-tab mode).
+function maybeAutoFocus() {
+  if (!autoFocus.rule || autoFocus.done || window !== window.top) {
+    return;
+  }
+  if (Date.now() - pageLoadedAt > AUTO_FOCUS_TIMEOUT_MS) {
+    autoFocus.done = true;
+    return;
+  }
+  if (window.QuietViewFocus.isActive() || pickerState) {
+    return;
+  }
+  const target = findFocusTarget(autoFocus.rule);
+  if (!target || target.getBoundingClientRect().height === 0) {
+    return;
+  }
+  autoFocus.done = true;
+  enterFocus(target, { fullscreen: false });
+}
+
+function scheduleApplyAll() {
+  window.clearTimeout(applyTimer);
+  applyTimer = window.setTimeout(applyAllRules, 120);
+}
+
+function onUrlChange() {
+  lastUrl = location.href;
+  pageLoadedAt = Date.now();
+  autoFocus.done = false;
+}
+
+function ensureObserver() {
+  if (observer) {
+    return;
+  }
+  observer = new MutationObserver(() => {
+    lastMutationAt = Date.now();
+    if (location.href !== lastUrl) {
+      onUrlChange();
+    }
+    if (window.QuietViewFocus.isActive() && !window.QuietViewFocus.checkConnected()) {
+      showToast("The page replaced that element, so focus ended.");
+    }
+    scheduleApplyAll();
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  // Settling checks (heal, auto-focus) also need a tick on quiet pages.
+  window.setTimeout(scheduleApplyAll, HEAL_SETTLE_MS + 50);
+}
+
+async function refreshRules() {
+  currentRules = (await ask({ type: "GET_RULES", origin: currentOrigin })).rules || [];
+  autoFocus.rule = await loadFocusRule();
+  applyAllRules();
+  showFloatingButtonIfNeeded();
 }
 
 // ---------------------------------------------------------------------------
@@ -586,7 +590,9 @@ function isQuietViewUi(el) {
   return Boolean(
     el &&
       el.closest &&
-      el.closest("#quietview-toast, #quietview-picker-hint, #quietview-picker-outline, #" + FLOATING_BTN_ID)
+      el.closest(
+        "#quietview-toast, #quietview-picker-hint, #quietview-picker-outline, #quietview-redact-toolbar, #" + FLOATING_BTN_ID
+      )
   );
 }
 
@@ -709,64 +715,22 @@ function stopPicker() {
   pickerState = null;
 }
 
-async function commitHide(target) {
-  const resolved = window.QuietViewSelector.resolveUniqueSelector(target, document.documentElement);
-  if (!resolved.selector || resolved.matchCount !== 1) {
-    showToast("Couldn't target that element. Try ↑ to select its container.", { isError: true });
-    return;
-  }
-  const rules = await saveRule({
-    origin: currentOrigin,
-    selector: resolved.selector,
-    label: window.QuietViewSelector.describeElement(target),
-    sourceType: "picker",
-    enabled: true,
-    hideMode: await getHideModePreference()
-  });
-  const created = rules[rules.length - 1];
-  currentRules = rules;
-  applyAllRules(true);
-  showFloatingButtonIfNeeded();
-  bumpStat("hides");
-  showToast("Hidden. It stays hidden on this site.", {
-    action: {
-      label: "Undo",
-      onClick: async () => {
-        removeRuleFromDom(created.id);
-        currentRules = await deleteRule(currentOrigin, created.id);
-        showFloatingButtonIfNeeded();
-      }
-    }
-  });
-}
-
-function commitFocus(target) {
-  // Called synchronously inside the click/keydown handler so the browser
-  // treats it as a user gesture and allows native fullscreen.
-  bumpStat("focuses");
-  window.QuietViewFocus.enter(target).then((mode) => {
-    if (mode === "tab") {
-      showToast("Focused. Press Esc to exit.");
-    }
-  });
-}
-
 function commitPicker() {
   if (!pickerState || !pickerState.target) {
     return;
   }
-  const { target, intent } = pickerState;
+  const { target, intent, replaceRuleId } = pickerState;
   stopPicker();
   if (intent === "focus") {
     commitFocus(target);
     return;
   }
-  commitHide(target).catch((error) => {
+  commitHide(target, { replaceRuleId }).catch((error) => {
     showToast(error.message || "Could not save that rule.", { isError: true });
   });
 }
 
-function startPicker(intent = "hide") {
+function startPicker(intent = "hide", options = {}) {
   stopPicker();
   if (intent === "focus" && window.QuietViewFocus.isActive()) {
     window.QuietViewFocus.exit();
@@ -852,6 +816,7 @@ function startPicker(intent = "hide") {
 
   pickerState = {
     intent: intent === "focus" ? "focus" : "hide",
+    replaceRuleId: options.replaceRuleId || null,
     target: null,
     pointed: null,
     history: [],
@@ -868,9 +833,182 @@ function startPicker(intent = "hide") {
   window.addEventListener("scroll", onScroll, true);
 }
 
+
+// ---------------------------------------------------------------------------
+// Committing a pick
+// ---------------------------------------------------------------------------
+
+async function undoRule(ruleId) {
+  currentRules = await deleteRule(currentOrigin, ruleId);
+  applyAllRules();
+  showFloatingButtonIfNeeded();
+}
+
+/**
+ * Hide `target` with a new rule, or repoint an existing rule when the user
+ * is re-picking an element that a site redesign moved.
+ */
+async function commitHide(target, { replaceRuleId = null } = {}) {
+  const Selector = window.QuietViewSelector;
+  const resolved = Selector.resolveUniqueSelector(target, document.documentElement);
+  if (!resolved.selector || resolved.matchCount !== 1) {
+    showToast("Couldn't target that element. Try ↑ to select its container.", { isError: true });
+    return;
+  }
+  const label = Selector.describeElement(target);
+  const existing = replaceRuleId && currentRules.find((rule) => rule.id === replaceRuleId);
+
+  const rules = await saveRule({
+    ...(existing || {}),
+    origin: currentOrigin,
+    selector: resolved.selector,
+    label: existing?.label || label,
+    fingerprint: Selector.fingerprint(target),
+    sourceType: existing?.sourceType || "picker",
+    enabled: true,
+    hideMode: existing?.hideMode || (await getHideModePreference())
+  });
+  currentRules = rules;
+  applyAllRules();
+  showFloatingButtonIfNeeded();
+
+  if (existing) {
+    showToast("Fixed. That rule works again.");
+    return;
+  }
+
+  const created = rules[rules.length - 1];
+  bumpStat("hides");
+  const actions = [{ label: "Undo", onClick: () => undoRule(created.id) }];
+
+  // Offer to widen the rule to every element of the same kind (e.g. every
+  // Shorts shelf in a feed), checked against the live page so the count is real.
+  const similar = Selector.buildSimilarSelector(target);
+  if (similar) {
+    actions.unshift({
+      label: `Hide all ${similar.count} like this`,
+      onClick: async () => {
+        currentRules = await saveRule({
+          ...created,
+          selector: similar.selector,
+          label: `${label} (all ${similar.count})`,
+          fingerprint: null
+        });
+        applyAllRules();
+        showToast(`Hid ${similar.count} similar elements.`, {
+          actions: [{ label: "Undo", onClick: () => undoRule(created.id) }]
+        });
+      }
+    });
+  }
+  showToast("Hidden. It stays hidden on this site.", { actions });
+}
+
+function enterFocus(target, options = {}) {
+  const Selector = window.QuietViewSelector;
+  const pinnedSelector = autoFocus.rule?.selector;
+  const isPinned = Boolean(pinnedSelector && (() => {
+    try {
+      return target.matches(pinnedSelector);
+    } catch (_err) {
+      return false;
+    }
+  })());
+
+  return window.QuietViewFocus.enter(target, {
+    fullscreen: options.fullscreen,
+    pin: {
+      pinned: isPinned,
+      onToggle: (pinned) => {
+        const resolved = Selector.resolveUniqueSelector(target, document.documentElement);
+        const rule = pinned && resolved.selector
+          ? { selector: resolved.selector, label: Selector.describeElement(target), fingerprint: Selector.fingerprint(target) }
+          : null;
+        saveFocusRule(rule).catch(() => {});
+      }
+    }
+  });
+}
+
+function commitFocus(target, { fromGesture = true } = {}) {
+  // Called synchronously inside the click/keydown handler so the browser
+  // treats it as a user gesture and allows native fullscreen.
+  bumpStat("focuses");
+  enterFocus(target, { fullscreen: fromGesture }).then((mode) => {
+    if (mode === "tab") {
+      showToast("Focused. Press Esc to exit.");
+    }
+  });
+}
+
+
+// ---------------------------------------------------------------------------
+// Redact mode and screenshots
+// ---------------------------------------------------------------------------
+
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+async function copyImageToClipboard(dataUrl) {
+  try {
+    const blob = await (await fetch(dataUrl)).blob();
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+// Capture exactly what a viewer would see: redactions on, QuietView's own
+// UI (toolbar, toasts, floating button) off.
+async function takeScreenshot() {
+  const transient = [document.getElementById("quietview-toast"), floatingButton].filter(Boolean);
+  let result;
+  await window.QuietViewRedact.withUiHidden(async () => {
+    transient.forEach((el) => (el.style.visibility = "hidden"));
+    await nextFrame();
+    await nextFrame();
+    try {
+      result = await ask({ type: "CAPTURE_TAB", host: location.hostname });
+    } finally {
+      transient.forEach((el) => (el.style.visibility = ""));
+    }
+  });
+  const copied = await copyImageToClipboard(result.dataUrl);
+  bumpStat("screenshots");
+  showToast(copied ? "Screenshot saved to Downloads and copied." : "Screenshot saved to Downloads.");
+}
+
+function startRedact(initialTarget = null) {
+  if (pickerState) {
+    stopPicker();
+  }
+  window.QuietViewRedact.start({
+    notify: (message) => showToast(message),
+    onScreenshot: () =>
+      takeScreenshot().catch((error) => showToast(error.message || "Couldn't take a screenshot.", { isError: true })),
+    onStop: (count) => {
+      if (count) {
+        showToast(`${count} item${count === 1 ? "" : "s"} redacted until you reload.`, {
+          actions: [
+            { label: "Screenshot", onClick: () => takeScreenshot().catch(() => {}) },
+            { label: "Clear", onClick: () => window.QuietViewRedact.clearAll() }
+          ]
+        });
+      }
+    }
+  });
+  if (initialTarget) {
+    window.QuietViewRedact.redactElement(initialTarget);
+  }
+  bumpStat("redacts");
+}
+
+// ---------------------------------------------------------------------------
+// Pasted selector / snippet rules (More options)
+// ---------------------------------------------------------------------------
+
 function findBestSelectorFromSnippet(snippet) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(snippet, "text/html");
+  const doc = new DOMParser().parseFromString(snippet, "text/html");
   const element = doc.body.firstElementChild;
   if (!element) {
     return { selector: "", matchCount: 0, ambiguous: true };
@@ -887,146 +1025,200 @@ function isValidSelector(selector) {
   }
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  (async () => {
-    if (!message || !message.type) {
-      sendResponse({ ok: false, error: "Invalid message." });
-      return;
-    }
-
-    if (message.type === "GET_RULES_FOR_PAGE") {
-      await refreshRules();
-      sendResponse({ ok: true, origin: currentOrigin, rules: currentRules });
-      return;
-    }
-
-    if (message.type === "START_PICKER") {
-      startPicker(message.intent === "focus" ? "focus" : "hide");
-      sendResponse({ ok: true });
-      return;
-    }
-
-    if (message.type === "EXIT_FOCUS") {
-      window.QuietViewFocus.exit();
-      sendResponse({ ok: true });
-      return;
-    }
-
-    if (message.type === "CANCEL_PICKER") {
-      stopPicker();
-      sendResponse({ ok: true });
-      return;
-    }
-
-    if (message.type === "CREATE_RULE_FROM_SELECTOR") {
-      const selector = (message.selector || "").trim();
-      if (!selector || !isValidSelector(selector)) {
-        sendResponse({ ok: false, error: "Invalid CSS selector." });
-        return;
-      }
-      const count = document.querySelectorAll(selector).length;
-      if (count === 0) {
-        sendResponse({ ok: false, error: "Nothing on this page matches that selector." });
-        return;
-      }
-      if (count > 1) {
-        sendResponse({
-          ok: false,
-          error: `That selector matches ${count} elements. Make it more specific so only one matches.`
-        });
-        return;
-      }
-
-      currentRules = await saveRule({
-        origin: currentOrigin,
-        selector,
-        label: window.QuietViewSelector.describeElement(document.querySelector(selector)),
-        sourceType: message.sourceType || "selector",
-        enabled: true,
-        hideMode: await getHideModePreference()
-      });
-      showFloatingButtonIfNeeded();
-      applyAllRules(true);
-      sendResponse({ ok: true, rules: currentRules, matched: count });
-      return;
-    }
-
-    if (message.type === "CREATE_RULE_FROM_SNIPPET") {
-      const snippet = (message.snippet || "").trim();
-      if (!snippet) {
-        sendResponse({ ok: false, error: "Snippet is empty." });
-        return;
-      }
-
-      const resolved = findBestSelectorFromSnippet(snippet);
-      if (!resolved.selector) {
-        sendResponse({ ok: false, error: "Could not derive a matching selector from snippet." });
-        return;
-      }
-      if (resolved.ambiguous || resolved.matchCount !== 1) {
-        sendResponse({
-          ok: false,
-          error: `That snippet matches ${resolved.matchCount} elements on this page. Paste a more specific element, or use “Hide an element” and click it instead.`,
-          selector: resolved.selector,
-          matched: resolved.matchCount
-        });
-        return;
-      }
-
-      const selector = resolved.selector;
-      const matched = resolved.matchCount;
-      currentRules = await saveRule({
-        origin: currentOrigin,
-        selector,
-        label: window.QuietViewSelector.describeElement(document.querySelector(selector)),
-        sourceType: "snippet",
-        enabled: true,
-        hideMode: await getHideModePreference()
-      });
-      showFloatingButtonIfNeeded();
-      applyAllRules(true);
-      sendResponse({ ok: true, rules: currentRules, selector, matched });
-      return;
-    }
-
-    if (message.type === "TOGGLE_RULE") {
-      const { id, enabled } = message;
-      currentRules = await toggleRule(currentOrigin, id, enabled);
-      if (!enabled) {
-        removeRuleFromDom(id);
-      } else {
-        const rule = currentRules.find((r) => r.id === id);
-        if (rule) {
-          applyRule(rule);
-        }
-      }
-      showFloatingButtonIfNeeded();
-      sendResponse({ ok: true, rules: currentRules });
-      return;
-    }
-
-    if (message.type === "DELETE_RULE") {
-      const { id } = message;
-      removeRuleFromDom(id);
-      currentRules = await deleteRule(currentOrigin, id);
-      showFloatingButtonIfNeeded();
-      sendResponse({ ok: true, rules: currentRules });
-      return;
-    }
-
-    if (message.type === "TOGGLE_QUIETVIEW") {
-      toggleQuietView();
-      sendResponse({ ok: true, enabled: isQuietViewEnabled });
-      return;
-    }
-
-    sendResponse({ ok: false, error: `Unknown message type: ${message.type}` });
-  })().catch((error) => {
-    sendResponse({ ok: false, error: error.message || "Unexpected error." });
+async function createRuleForElement(selector, sourceType) {
+  const element = document.querySelector(selector);
+  currentRules = await saveRule({
+    origin: currentOrigin,
+    selector,
+    label: window.QuietViewSelector.describeElement(element),
+    fingerprint: window.QuietViewSelector.fingerprint(element),
+    sourceType,
+    enabled: true,
+    hideMode: await getHideModePreference()
   });
+  applyAllRules();
+  showFloatingButtonIfNeeded();
+}
+
+// ---------------------------------------------------------------------------
+// Messages from the popup and background
+// ---------------------------------------------------------------------------
+
+const handlers = {
+  async GET_RULES_FOR_PAGE() {
+    await refreshRules();
+    return { origin: currentOrigin, rules: currentRules };
+  },
+
+  async GET_PAGE_STATE() {
+    ruleCounts = window.QuietViewHider.applyRules(currentRules);
+    await maybeHealRules({ force: true });
+    return {
+      counts: ruleCounts,
+      paused: !isQuietViewEnabled,
+      focusRule: autoFocus.rule,
+      redactions: window.QuietViewRedact.count()
+    };
+  },
+
+  START_REDACT() {
+    startRedact();
+    return {};
+  },
+
+  async SCREENSHOT() {
+    await takeScreenshot();
+    return {};
+  },
+
+  CLEAR_REDACTIONS() {
+    window.QuietViewRedact.clearAll();
+    return {};
+  },
+
+  START_PICKER(message) {
+    startPicker(message.intent === "focus" ? "focus" : "hide", { replaceRuleId: message.replaceRuleId });
+    return {};
+  },
+
+  CANCEL_PICKER() {
+    stopPicker();
+    return {};
+  },
+
+  EXIT_FOCUS() {
+    window.QuietViewFocus.exit();
+    return {};
+  },
+
+  async CONTEXT_ACTION(message) {
+    const target = lastContextTarget;
+    if (!target || !target.isConnected) {
+      throw new Error("Right-click the element again, then choose the action.");
+    }
+    if (message.intent === "focus") {
+      commitFocus(target, { fromGesture: false });
+    } else if (message.intent === "redact") {
+      startRedact(target);
+    } else {
+      await commitHide(target);
+    }
+    return {};
+  },
+
+  async CLEAR_FOCUS_RULE() {
+    await saveFocusRule(null);
+    return {};
+  },
+
+  async SET_RECIPE(message) {
+    const recipe = window.QuietViewRecipes.recipesForHost(location.hostname);
+    const item = recipe?.items.find((entry) => entry.id === message.recipeId);
+    if (!item) {
+      throw new Error("That cleanup isn't available for this site.");
+    }
+    const existing = currentRules.find((rule) => rule.recipeId === item.id);
+    if (message.enabled && !existing) {
+      currentRules = await saveRule({
+        origin: currentOrigin,
+        selector: item.selector,
+        label: item.label,
+        sourceType: "recipe",
+        recipeId: item.id,
+        enabled: true,
+        hideMode: item.hideMode || "displayNone"
+      });
+    } else if (!message.enabled && existing) {
+      currentRules = await deleteRule(currentOrigin, existing.id);
+    }
+    applyAllRules();
+    showFloatingButtonIfNeeded();
+    return { rules: currentRules, matched: existing ? 0 : ruleCounts[currentRules.at(-1)?.id] || 0 };
+  },
+
+  async CREATE_RULE_FROM_SELECTOR(message) {
+    const selector = (message.selector || "").trim();
+    if (!selector || !isValidSelector(selector)) {
+      throw new Error("That isn't a valid CSS selector.");
+    }
+    const count = document.querySelectorAll(selector).length;
+    if (count === 0) {
+      throw new Error("Nothing on this page matches that selector.");
+    }
+    if (count > 1) {
+      throw new Error(`That selector matches ${count} elements. Make it more specific so only one matches.`);
+    }
+    await createRuleForElement(selector, message.sourceType || "selector");
+    return { rules: currentRules, matched: count };
+  },
+
+  async CREATE_RULE_FROM_SNIPPET(message) {
+    const snippet = (message.snippet || "").trim();
+    if (!snippet) {
+      throw new Error("Paste an HTML snippet first.");
+    }
+    const resolved = findBestSelectorFromSnippet(snippet);
+    if (!resolved.selector) {
+      throw new Error("Couldn't find that element on this page.");
+    }
+    if (resolved.ambiguous || resolved.matchCount !== 1) {
+      throw new Error(
+        `That snippet matches ${resolved.matchCount} elements on this page. Paste a more specific element, or use “Hide an element” and click it instead.`
+      );
+    }
+    await createRuleForElement(resolved.selector, "snippet");
+    return { rules: currentRules, selector: resolved.selector, matched: 1 };
+  },
+
+  async TOGGLE_RULE(message) {
+    currentRules = await toggleRule(currentOrigin, message.id, message.enabled);
+    applyAllRules();
+    showFloatingButtonIfNeeded();
+    return { rules: currentRules };
+  },
+
+  async DELETE_RULE(message) {
+    currentRules = await deleteRule(currentOrigin, message.id);
+    applyAllRules();
+    showFloatingButtonIfNeeded();
+    return { rules: currentRules };
+  },
+
+  TOGGLE_QUIETVIEW() {
+    toggleQuietView();
+    return { enabled: isQuietViewEnabled };
+  }
+};
+
+// On the welcome page this script runs as an extension page, where it would
+// also receive messages meant for background.js. Only listen on real sites.
+const isExtensionPage = /^(chrome|moz)-extension:$/.test(location.protocol);
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (isExtensionPage) {
+    return false;
+  }
+  const handler = message && handlers[message.type];
+  if (!handler) {
+    sendResponse({ ok: false, error: `Unknown message type: ${message?.type}` });
+    return false;
+  }
+  Promise.resolve()
+    .then(() => handler(message))
+    .then((result) => sendResponse({ ok: true, ...result }))
+    .catch((error) => sendResponse({ ok: false, error: error.message || "Unexpected error." }));
   return true;
 });
 
-migrateLegacyDomMarkers();
+// Remember what was right-clicked so the context menu can act on it.
+document.addEventListener(
+  "contextmenu",
+  (event) => {
+    lastContextTarget = event.target instanceof Element ? event.target : null;
+  },
+  true
+);
+
+cleanUpLegacyMarkers();
 refreshRules().catch(() => {});
 ensureObserver();

@@ -22,7 +22,11 @@ When you create hide rules (via picker, CSS selector, or HTML snippet), QuietVie
 - Your preferences (for example, whether hidden elements leave an empty space) and the position of the on-page toggle button
 - Two local counters: how many times you have hidden or focused an element. They are used only to decide when to show a one-time "rate QuietView" prompt, and are never sent anywhere
 
-Focus mode does not store anything. It only changes how the current page is displayed until you exit.
+- If you turn on "Focus here every visit": the site origin and a selector and fingerprint of that element, so it can be focused automatically next time
+
+Redact mode stores nothing: redactions live only on the open page until you reload or clear them. Auto-detect scans the page text inside your browser and never sends it anywhere. Screenshots are saved to your Downloads folder and, when the browser allows it, copied to your clipboard. QuietView does not upload them.
+
+Otherwise, Focus mode stores nothing. It only changes how the current page is displayed until you exit.
 
 This data remains on your device unless you export it manually as JSON.
 
@@ -34,6 +38,7 @@ This data remains on your device unless you export it manually as JSON.
 | `activeTab` | Interact with the tab you have open when using the popup |
 | `scripting` | Inject the content script on the active tab if it is not already loaded |
 | `downloads` | Save exported rule JSON when you choose Export |
+| `contextMenus` | Add "Hide this element" and "Focus on this element" to the right-click menu |
 | `<all_urls>` (host) | Apply hide rules on websites you choose; no background network access |
 
 ## Export and import

@@ -19,14 +19,18 @@ migrateLegacyStorage().catch(() => {});
 
 function normalizeRule(rule) {
   const now = Date.now();
+  const hideMode = ["visibilityHidden", "blur"].includes(rule.hideMode) ? rule.hideMode : "displayNone";
   return {
     id: rule.id || crypto.randomUUID(),
     origin: rule.origin,
     selector: rule.selector,
     label: typeof rule.label === "string" ? rule.label.slice(0, 80) : "",
+    fingerprint: rule.fingerprint && typeof rule.fingerprint === "object" ? rule.fingerprint : null,
+    recipeId: typeof rule.recipeId === "string" ? rule.recipeId : null,
     sourceType: rule.sourceType || "selector",
     enabled: typeof rule.enabled === "boolean" ? rule.enabled : true,
-    hideMode: rule.hideMode === "visibilityHidden" ? "visibilityHidden" : "displayNone",
+    hideMode,
+    healedAt: rule.healedAt || null,
     createdAt: rule.createdAt || now,
     updatedAt: now
   };
@@ -50,7 +54,7 @@ async function setRuleMap(ruleMap) {
   await chrome.storage.local.set({ [STORAGE_KEY]: ruleMap });
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     if (!message || !message.type) {
       sendResponse({ ok: false, error: "Invalid message." });
@@ -151,6 +155,47 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return;
     }
 
+    if (message.type === "CAPTURE_TAB") {
+      // captureVisibleTab grabs whatever tab is showing; never capture a tab
+      // other than the one that asked.
+      const tab = sender.tab;
+      if (!tab) {
+        sendResponse({ ok: false, error: "Screenshots work from a page tab." });
+        return;
+      }
+      if (!tab.active) {
+        await chrome.tabs.update(tab.id, { active: true });
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      const [shown] = await chrome.tabs.query({ active: true, windowId: tab.windowId });
+      if (!shown || shown.id !== tab.id) {
+        sendResponse({ ok: false, error: "Switch to this tab, then take the screenshot again." });
+        return;
+      }
+      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+      const host = String(message.host || "page").replace(/[^a-z0-9.-]/gi, "");
+      // Service workers (Chrome) can download data: URLs; Firefox's
+      // background page needs a blob URL instead.
+      let url = dataUrl;
+      if (typeof URL.createObjectURL === "function") {
+        url = URL.createObjectURL(await (await fetch(dataUrl)).blob());
+      }
+      await chrome.downloads.download({ url, filename: `quietview-${host}-${stamp}.png`, saveAs: false });
+      sendResponse({ ok: true, dataUrl });
+      return;
+    }
+
+    if (message.type === "SET_BADGE") {
+      const tabId = sender.tab?.id;
+      if (tabId != null) {
+        const text = message.count > 0 ? String(Math.min(message.count, 999)) : "";
+        await chrome.action.setBadgeText({ tabId, text });
+      }
+      sendResponse({ ok: true });
+      return;
+    }
+
     sendResponse({ ok: false, error: `Unknown message type: ${message.type}` });
   })().catch((error) => {
     sendResponse({ ok: false, error: error.message || "Unexpected error." });
@@ -161,7 +206,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 const COMMAND_INTENTS = {
   "start-picker": "hide",
-  "focus-element": "focus"
+  "focus-element": "focus",
+  "redact-mode": "redact"
 };
 
 async function sendToTab(tabId, message) {
@@ -187,8 +233,45 @@ chrome.commands.onCommand.addListener(async (command) => {
     return;
   }
   try {
-    await sendToTab(tabId, { type: "START_PICKER", intent });
+    await sendToTab(tabId, intent === "redact" ? { type: "START_REDACT" } : { type: "START_PICKER", intent });
   } catch (_error) {
     // Restricted page (browser settings, store pages): nothing to pick.
+  }
+});
+
+// Right-click → act on exactly the element under the cursor, no picker.
+const CONTEXT_MENUS = [
+  { id: "quietview-hide", title: "Hide this element", intent: "hide" },
+  { id: "quietview-focus", title: "Focus on this element", intent: "focus" },
+  { id: "quietview-redact", title: "Redact this element", intent: "redact" }
+];
+
+chrome.runtime.onInstalled.addListener((details) => {
+  chrome.contextMenus.removeAll(() => {
+    for (const menu of CONTEXT_MENUS) {
+      chrome.contextMenus.create({
+        id: menu.id,
+        title: menu.title,
+        contexts: ["page", "selection", "link", "image", "video", "frame"],
+        documentUrlPatterns: ["http://*/*", "https://*/*"]
+      });
+    }
+  });
+  chrome.action.setBadgeBackgroundColor({ color: QUIETVIEW.colors.accent }).catch(() => {});
+
+  if (details.reason === "install") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
+  }
+});
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  const menu = CONTEXT_MENUS.find((entry) => entry.id === info.menuItemId);
+  if (!menu || !tab || typeof tab.id !== "number") {
+    return;
+  }
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "CONTEXT_ACTION", intent: menu.intent }, { frameId: 0 });
+  } catch (_error) {
+    // Page loaded before install: the next right-click after a reload works.
   }
 });

@@ -1,4 +1,4 @@
-# QuietView: Store listing copy (v1.1)
+# QuietView: Store listing copy (v1.2)
 
 Use this for the Chrome Web Store, Firefox Add-ons (AMO) and Edge Add-ons. Positioning rationale: [`MARKET_RESEARCH.md`](MARKET_RESEARCH.md).
 
@@ -6,9 +6,9 @@ Use this for the Chrome Web Store, Firefox Add-ons (AMO) and Edge Add-ons. Posit
 
 **QuietView: Hide Elements & Focus Mode**
 
-## Short description (123 / 132 chars)
+## Short description (116 / 132 chars)
 
-Hide distracting elements on any website with one click, or focus any element full screen. Saved per site. No CSS. Private.
+Hide distractions, focus any element full screen, or redact sensitive info for screenshots. Saved per site. Private.
 
 ## Long description
 
@@ -25,11 +25,24 @@ Click "Hide an element", point at what bothers you, and click. It disappears now
 **FOCUS MODE: MAKE ANY ELEMENT FILL YOUR SCREEN**
 Click "Focus on an element" and pick a video, a chat, an article, a chart or a document. It goes full screen and everything else is gone. Press Esc to return. Video and images get a black backdrop, like a real player.
 
+**REDACT SENSITIVE INFO, THEN SCREENSHOT**
+Made for bloggers, tutors and anyone who records their screen. Click anything to blur it or black it out, or drag a box over any area. Turn on Auto-detect and QuietView covers emails, phone numbers, card numbers, API keys and IP addresses for you. One click saves a clean screenshot and copies it to your clipboard.
+
+**ONE-CLICK CLEANUPS**
+On YouTube, Reddit, X, Twitch and WhatsApp Web, switch off Shorts, recommendations, comments, sidebars and more with one toggle.
+
+**RULES THAT FIX THEMSELVES**
+When a website redesigns, most element hiders silently stop working. QuietView remembers what you hid, finds it again, and tells you if something needs a quick re-pick.
+
 **BUILT SO YOU DON'T HAVE TO THINK ABOUT IT**
 • Grab the whole panel: press ↑ to select the container instead of aiming at its edge
+• Right-click anything → "Hide this element" or "Focus on this element"
+• "Hide all like this" removes every card of the same kind in one click
+• Blur instead of hide (hover to peek), handy for screen-sharing
+• Focus here every visit: open a site already focused on what you need
 • Undo after every change
 • Rules re-apply on pages that load content as you browse (YouTube, X, Gmail and similar)
-• Shortcuts: Alt+Shift+H to hide, Alt+Shift+F to focus
+• Shortcuts: Alt+Shift+H to hide, Alt+Shift+F to focus, Alt+Shift+R to redact
 • A floating button shows everything again whenever you need it
 • Export and import all your rules
 
@@ -75,9 +88,11 @@ https://eligapris.com/quietview/privacy
 | `activeTab` | Act on the tab the user is viewing when they click the toolbar button or use a shortcut |
 | `scripting` | Load QuietView into tabs that were already open before install or update, so the picker works immediately |
 | `downloads` | Save the JSON file when the user clicks "Export all sites" |
+| `contextMenus` | Right-click "Hide this element" / "Focus on this element" on the clicked element |
+| Screenshot (`captureVisibleTab`, covered by host access) | Capture the current tab after the user redacts it and presses Screenshot; saved locally only |
 | Host `<all_urls>` | Users hide elements on any site they choose, and rules must re-apply automatically when that site loads. No page data is sent anywhere. |
 
-**Single purpose:** Let users reduce distractions on web pages by hiding elements they choose or focusing a single element.
+**Single purpose:** Control what a web page shows: hide distracting elements, focus a single element, or cover sensitive information before recording or taking a screenshot.
 
 ## Firefox
 
@@ -86,4 +101,4 @@ https://eligapris.com/quietview/privacy
 
 ## Version
 
-**1.1.0**
+**1.2.0**
