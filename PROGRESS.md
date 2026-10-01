@@ -48,12 +48,13 @@ Product
 - [x] Welcome page on first install with a hands-on demo
 
 Store
-- [ ] New screenshots 5 × 1280×800: ① Focus a YouTube player ② Hide a feed (before/after) ③ Picker with ↑ hint ④ Popup rules list ⑤ "Nothing leaves your browser"
-- [ ] 1400×560 marquee, 440×280 tile
+- [x] New screenshots 5 × 1280×800 (Focus, Hide before/after, Redact, Cleanups, Picker + privacy) plus a 1400×560 marquee and 440×280 tile, all in `store/`
+- [x] Listing copy and privacy-practices paste blocks: `store/STORE_LISTING.md`, `store/PRIVACY_PRACTICES.md`
+- [ ] **Deploy eligapris-site first** (the live privacy page is still the June version)
 - [ ] 30-second demo video (YouTube, unlisted is fine) linked on the listing
-- [ ] Rewrite the long description using `docs/STORE_LISTING.md` v1.1 copy
+- [ ] Paste the plain-text long description from `store/STORE_LISTING.md`
 - [x] Listing live on CWS (1.0.1): https://chromewebstore.google.com/detail/quietview/eljnmldcepcadaapeabdppafpcpgncka
-- [ ] Upload v1.2.0 to CWS (`./scripts/package.sh` → `dist/quietview-1.2.0.zip`). The new `contextMenus` permission doesn't trigger a warning
+- [ ] Upload v1.2.0 to CWS (`./scripts/package.sh` → `dist/quietview-1.2.0-store.zip`). The new `contextMenus` permission doesn't trigger a warning
 - [ ] Publish on Firefox AMO (almost no competition there)
 - [ ] Publish on Edge Add-ons
 - [ ] Verify the publisher domain (eligapris.com) in the CWS dashboard

@@ -8,7 +8,7 @@ This guide covers publishing QuietView to the Chrome Web Store and for self-host
 - [x] `manifest.json` - v3, all permissions documented
 - [x] Icons: 16, 32, 48, 96, 128px (PNG) + SVG source
 - [x] Privacy policy: `PRIVACY.md` + hosted at https://eligapris.com/quietview/privacy
-- [x] Store listing copy: `docs/STORE_LISTING.md`
+- [x] Store listing copy: `store/STORE_LISTING.md`
 - [x] Package script: `scripts/package.sh`
 
 ### Before Submitting
@@ -51,7 +51,7 @@ This guide covers publishing QuietView to the Chrome Web Store and for self-host
 |-------|-------|
 | Name | QuietView |
 | Description (short) | Hide distracting page elements on any site. Pick, paste, or rule — your layout stays quiet. |
-| Description (long) | See `docs/STORE_LISTING.md` |
+| Description (long) | See `store/STORE_LISTING.md` |
 | Category | Productivity |
 | Language | English |
 

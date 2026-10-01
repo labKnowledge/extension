@@ -33,7 +33,7 @@ Includes the unreleased 1.1.0 work.
 - Hide mode is now a saved preference ("Remove it and close the gap" / "Leave an empty space")
 - Selectors prefer stable attributes (id, data-testid, aria-label) and fall back to an exact path, so picking never fails with "matched N elements"
 - Hide shortcut is now Alt+Shift+H (was Ctrl+Shift+Y, which clashed with Type For Me). Existing installs keep their binding
-- Store name: "QuietView: Hide Elements & Focus Mode", with a new short description
+- Store name: "QuietView: Hide Elements, Focus & Redact", with a new short description
 
 ### Fixed
 

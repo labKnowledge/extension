@@ -83,7 +83,7 @@ QuietView stores rules locally only; no remote data collection.
 ./scripts/package.sh
 ```
 
-Output: `dist/quietview-<version>.zip` for Chrome Web Store and Firefox AMO upload.
+Output: `dist/quietview-<version>-store.zip` for Chrome Web Store and Firefox AMO upload.
 
 ## Generate all assets (icons, screenshots, store graphics)
 

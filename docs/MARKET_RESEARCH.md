@@ -69,10 +69,10 @@ Reader View (300K), Just Read (200K), Tranquility (about 3K, **unverified**). Me
 **One-line value prop:** _Click anything to hide it, or click once to make it fill your screen. QuietView remembers it on every visit._
 
 **Store title** (CWS shows about 35 characters in search; keywords in the title matter most):
-`QuietView: Hide Elements & Focus Mode` ← shipped in v1.1 manifest
+`QuietView: Hide Elements, Focus & Redact` ← shipped in the v1.2 manifest (adds the Redact search intent: "blur sensitive info", "redact screenshot")
 
-**Short description** (123/132 characters, shipped):
-`Hide distracting elements on any website with one click, or focus any element full screen. Saved per site. No CSS. Private.`
+**Short description** (116/132 characters, shipped in v1.2):
+`Hide distractions, focus any element full screen, or redact sensitive info for screenshots. Saved per site. Private.`
 
 **Tagline:** _Hide what distracts you. Focus on what matters._
 
